@@ -1,26 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use signature::{Signer, Verifier};
-use thiserror::Error;
+use signature::Verifier;
 
-use crate::{key::ecc::EccKeyPair, Error};
-
-/// 数字签名错误类型
-#[derive(Debug, Error)]
-pub enum SignError {
-    #[error("Signature generation failed: {0}")]
-    SignatureGeneration(String),
-    #[error("Signature verification failed: {0}")]
-    SignatureVerification(String),
-    #[error("Invalid signature format: {0}")]
-    InvalidFormat(String),
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
-    #[error("System time error: {0}")]
-    SystemTime(#[from] std::time::SystemTimeError),
-}
+use crate::Error;
 
 /// 位置信息结构体
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -92,153 +76,6 @@ impl DigitalSignature {
     }
 }
 
-/// 数字签名实现
-impl EccKeyPair {
-    pub fn sign_data(
-        &self,
-        data: &[u8],
-        location: LocationInfo,
-        signer_info: Option<String>,
-        signature_type: Option<String>,
-    ) -> Result<DigitalSignature, Error> {
-        // 获取当前时间戳
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-
-        // 计算数据哈希（使用 SHA-256）
-        let data_hash = self.compute_sha256(data);
-
-        // 构建扩展签名信息
-        let extended_info = ExtendedSignatureInfo {
-            data_hash: data_hash.clone(),
-            timestamp,
-            location,
-            signer_info,
-            signature_type,
-        };
-
-        // 序列化扩展信息用于签名
-        let extended_info_bytes = serde_json::to_vec(&extended_info).map_err(|e| {
-            Error::SignatureError(format!("Failed to serialize extended info: {e}"))
-        })?;
-
-        // 创建待签名数据：原始数据哈希 + 扩展信息
-        let mut sign_data = Vec::new();
-        sign_data.extend_from_slice(&data_hash);
-        sign_data.extend_from_slice(&extended_info_bytes);
-
-        // 进行 Ed25519 签名
-        let signature = self.private_key.sign(&sign_data);
-
-        Ok(DigitalSignature {
-            signature: signature.to_bytes().to_vec(),
-            extended_info,
-            public_key: self.get_public_key_bytes(),
-        })
-    }
-
-    pub fn verify_signature(
-        &self,
-        data: &[u8],
-        digital_signature: &DigitalSignature,
-    ) -> Result<bool, Error> {
-        // 重新计算数据哈希
-        let computed_hash = self.compute_sha256(data);
-
-        // 检查哈希是否匹配
-        if computed_hash != digital_signature.extended_info.data_hash {
-            return Ok(false);
-        }
-
-        // 重新序列化扩展信息
-        let extended_info_bytes =
-            serde_json::to_vec(&digital_signature.extended_info).map_err(|e| {
-                Error::SignatureError(format!("Failed to serialize extended info: {e}"))
-            })?;
-
-        // 重建待验证数据
-        let mut verify_data = Vec::new();
-        verify_data.extend_from_slice(&computed_hash);
-        verify_data.extend_from_slice(&extended_info_bytes);
-
-        // 从字节重建 Ed25519 签名
-        let signature = Signature::from_bytes(
-            digital_signature
-                .signature
-                .as_slice()
-                .try_into()
-                .map_err(|_| Error::SignatureError("Invalid signature length".to_string()))?,
-        );
-
-        // 使用数字签名中的公钥进行验证
-        let public_key = VerifyingKey::from_bytes(
-            digital_signature
-                .public_key
-                .as_slice()
-                .try_into()
-                .map_err(|_| Error::SignatureError("Invalid public key length".to_string()))?,
-        )
-        .map_err(|e| Error::SignatureError(format!("Invalid public key: {e}")))?;
-
-        // 执行 Ed25519 验证
-        Ok(public_key.verify(&verify_data, &signature).is_ok())
-    }
-
-    pub fn sign_with_timestamp(
-        &self,
-        data: &[u8],
-        signer_info: Option<String>,
-    ) -> Result<DigitalSignature, Error> {
-        self.sign_data(
-            data,
-            LocationInfo::default(), // 使用默认（空）位置信息
-            signer_info,
-            Some("时间戳签名".to_string()),
-        )
-    }
-
-    pub fn add_location_info(
-        &self,
-        data: &[u8],
-        existing_signature: &DigitalSignature,
-        new_location: LocationInfo,
-    ) -> Result<DigitalSignature, Error> {
-        // 复制现有签名的信息，但更新位置
-        let mut new_extended_info = existing_signature.extended_info.clone();
-        new_extended_info.location = new_location;
-        new_extended_info.timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(); // 更新时间戳
-
-        // 重新计算数据哈希
-        let data_hash = self.compute_sha256(data);
-        new_extended_info.data_hash = data_hash.clone();
-
-        // 序列化新的扩展信息
-        let extended_info_bytes = serde_json::to_vec(&new_extended_info).map_err(|e| {
-            Error::SignatureError(format!("Failed to serialize extended info: {e}"))
-        })?;
-
-        // 创建新的待签名数据
-        let mut sign_data = Vec::new();
-        sign_data.extend_from_slice(&data_hash);
-        sign_data.extend_from_slice(&extended_info_bytes);
-
-        // 生成新签名
-        let signature = self.private_key.sign(&sign_data);
-
-        Ok(DigitalSignature {
-            signature: signature.to_bytes().to_vec(),
-            extended_info: new_extended_info,
-            public_key: self.get_public_key_bytes(),
-        })
-    }
-
-    /// 计算 SHA-256 哈希
-    fn compute_sha256(&self, data: &[u8]) -> Vec<u8> {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(data);
-        hasher.finalize().to_vec()
-    }
-}
 
 /// 独立的签名验证函数（不需要密钥对实例）
 pub fn verify_signature_standalone(
@@ -291,7 +128,8 @@ pub fn verify_signature_standalone(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key::ecc::EccKeyPair;
+    use crate::EccKeyPair;
+    use std::time::UNIX_EPOCH;
 
     #[test]
     fn test_sign_and_verify_with_location() {

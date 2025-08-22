@@ -17,7 +17,7 @@ pub use cert::{
 pub use error::{Error, Result};
 pub use hash::{hash_data, hash_data_hex, sha256, sha512, verify_hash, HashAlgorithm};
 pub use key::ecc::EccKeyPair;
-pub use signature::ecc::{DigitalSignature, LocationInfo, SignError};
+pub use signature::ecc::{DigitalSignature, LocationInfo};
 
 /// 预导入模块，包含最常用的类型和函数
 pub mod prelude {
