@@ -53,10 +53,13 @@ pub fn create_certificate(
     let not_before = OffsetDateTime::now_utc();
     let not_after = not_before + Duration::days(validity_days as i64);
 
+    // 设置时间时减去一小时，确保证书立即生效
+    let not_before_adjusted = not_before - Duration::hours(1);
+    
     params.not_before = rcgen::date_time_ymd(
-        not_before.year(),
-        not_before.month() as u8,
-        not_before.day(),
+        not_before_adjusted.year(),
+        not_before_adjusted.month() as u8,
+        not_before_adjusted.day(),
     );
     params.not_after =
         rcgen::date_time_ymd(not_after.year(), not_after.month() as u8, not_after.day());
@@ -108,7 +111,7 @@ pub fn create_certificate(
         serial_number: hex::encode(serial_number),
         subject: subject.clone(),
         issuer: issuer.unwrap_or(subject),
-        not_before,
+        not_before: not_before_adjusted,
         not_after,
         public_key: keypair.get_public_key_bytes(),
         key_usage: if is_ca {
