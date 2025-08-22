@@ -1,0 +1,22 @@
+[package]
+name = "capsula-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "数据胶囊命令行工具"
+
+[[bin]]
+name = "capsula"
+path = "src/main.rs"
+
+[dependencies]
+capsula-api = { workspace = true }
+capsula-core = { workspace = true }
+capsula-crypto = { workspace = true }
+capsula-pki = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }

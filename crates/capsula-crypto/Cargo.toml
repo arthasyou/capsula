@@ -1,0 +1,25 @@
+[package]
+name = "capsula-crypto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "基础加密原语库，提供密钥管理、数字签名和哈希功能"
+
+[dependencies]
+ed25519-dalek = { workspace = true }
+getrandom = { workspace = true }
+sha2 = { workspace = true }
+signature = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+rcgen = { workspace = true }
+x509-cert = { workspace = true }
+pem = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.12"

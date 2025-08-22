@@ -1,0 +1,24 @@
+[package]
+name = "capsula-pki"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "PKI基础设施库，提供证书管理、CA、CRL等功能"
+
+[dependencies]
+capsula-crypto = { workspace = true }
+rcgen = { workspace = true }
+x509-cert = { workspace = true }
+der = { workspace = true }
+pem = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+hex = { workspace = true }
+getrandom = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.12"

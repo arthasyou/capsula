@@ -1,0 +1,16 @@
+[package]
+name = "capsula-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "数据胶囊核心功能库"
+
+[dependencies]
+capsula-crypto = { workspace = true }
+capsula-pki = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
