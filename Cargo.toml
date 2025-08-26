@@ -24,12 +24,18 @@ capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
+capsula-key = { path = "crates/capsula-key" }
 
 # 通用依赖
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"] }
+time = { version = "0.3", features = [
+    "serde",
+    "macros",
+    "formatting",
+    "parsing",
+] }
 
 [workspace]
 resolver = "2"
@@ -39,6 +45,7 @@ members = [
     "crates/capsula-core",
     "crates/capsula-api",
     "crates/capsula-cli",
+    "crates/capsula-key",
 ]
 
 [workspace.package]
@@ -54,6 +61,7 @@ capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
+capsula-key = { path = "crates/capsula-key" }
 
 # 外部依赖
 serde = { version = "1.0", features = ["derive"] }
