@@ -19,6 +19,10 @@ path = "examples/pki_demo.rs"
 name = "full_demo"
 path = "examples/full_demo.rs"
 
+[[example]]
+name = "storage_demo"
+path = "examples/storage_demo.rs"
+
 [dependencies]
 capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
@@ -86,6 +90,9 @@ rcgen = { version = "0.14", features = ["pem"] }
 x509-cert = { version = "0.2", features = ["pem"] }
 der = { version = "0.7", features = ["pem"] }
 pem = "3.0"
+
+# 密钥存储相关
+chacha20poly1305 = { version = "0.10", features = ["std"] }
 
 # 开发依赖
 tempfile = "3.12"

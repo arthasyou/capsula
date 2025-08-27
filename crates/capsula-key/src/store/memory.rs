@@ -9,9 +9,12 @@ use crate::{
     types::KeyHandle,
 };
 
+/// Type alias for the key storage map
+type KeyStorage = Arc<RwLock<HashMap<KeyHandle, (KeyMetadata, Vec<u8>)>>>;
+
 /// In-memory key store implementation
 pub struct MemoryKeyStore {
-    keys: Arc<RwLock<HashMap<KeyHandle, (KeyMetadata, Vec<u8>)>>>,
+    keys: KeyStorage,
 }
 
 impl MemoryKeyStore {

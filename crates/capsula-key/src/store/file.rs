@@ -25,7 +25,7 @@ impl FileKeyStore {
                 ));
             }
             let cipher = ChaCha20Poly1305::new_from_slice(&key)
-                .map_err(|e| Error::invalid_configuration(e))?;
+                .map_err(Error::invalid_configuration)?;
             Some(cipher)
         } else {
             None
@@ -55,7 +55,7 @@ impl FileKeyStore {
             
             let ciphertext = cipher
                 .encrypt(&nonce, plaintext)
-                .map_err(|e| Error::encryption(e))?;
+                .map_err(Error::encryption)?;
             
             // Prepend nonce to ciphertext
             let mut result = nonce.to_vec();
@@ -79,7 +79,7 @@ impl FileKeyStore {
             
             cipher
                 .decrypt(nonce, encrypted)
-                .map_err(|e| Error::decryption(e))
+                .map_err(Error::decryption)
         } else {
             Ok(ciphertext.to_vec())
         }
