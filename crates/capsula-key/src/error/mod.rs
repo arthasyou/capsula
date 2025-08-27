@@ -1,3 +1,5 @@
+mod store;
+
 use thiserror::Error;
 
 /// Crypto模块的错误类型
