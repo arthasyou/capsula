@@ -1,6 +1,6 @@
-use capsula_crypto::{
-    create_certificate, export_certificate, sign_certificate, CertificateSubject, EccKeyPair,
-    X509Certificate,
+use crate::{
+    cert::{create_certificate, export_certificate, sign_certificate, CertificateSubject, X509Certificate},
+    key::KeyPair as EccKeyPair,
 };
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
@@ -65,7 +65,7 @@ impl CertificateAuthority {
     /// 创建新的根CA
     pub fn new_root_ca(config: CAConfig) -> PkiResult<Self> {
         // 生成密钥对
-        let keypair = EccKeyPair::generate_keypair()
+        let keypair = EccKeyPair::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
 
         // 创建CA证书主体
@@ -170,7 +170,7 @@ impl CertificateAuthority {
     /// 创建中间CA
     pub fn create_intermediate_ca(&mut self, config: CAConfig) -> PkiResult<CertificateAuthority> {
         // 生成中间CA的密钥对
-        let intermediate_keypair = EccKeyPair::generate_keypair()
+        let intermediate_keypair = EccKeyPair::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
 
         // 创建中间CA的证书主体
@@ -242,7 +242,7 @@ impl CertificateAuthority {
                 .map_err(|e| PkiError::CAError(format!("Failed to import private key: {e}")))?;
 
         // 导入证书
-        let certificate = capsula_crypto::import_certificate(&export.certificate_pem)
+        let certificate = crate::cert::import_certificate(&export.certificate_pem)
             .map_err(|e| PkiError::CAError(format!("Failed to import certificate: {e}")))?;
 
         let mut ca = Self::from_existing(keypair, certificate, export.config)?;
@@ -285,7 +285,7 @@ mod tests {
         let mut ca = CertificateAuthority::new_root_ca(config).unwrap();
 
         // 为终端实体创建密钥对
-        let end_entity_keypair = EccKeyPair::generate_keypair().unwrap();
+        let end_entity_keypair = EccKeyPair::generate().unwrap();
 
         // 创建证书主体
         let subject = CertificateSubject {

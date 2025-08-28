@@ -3,16 +3,18 @@
 //! 提供完整的PKI功能，包括证书管理、CA、CRL等
 
 pub mod ca;
+pub mod cert;
 pub mod chain;
 pub mod crl;
 pub mod error;
+pub mod key;
 pub mod store;
 pub mod types;
 
 // 重新导出常用类型
 pub use ca::{CAConfig, CAExport, CertificateAuthority};
-// 从 capsula-crypto 重新导出证书相关类型
-pub use capsula_crypto::{
+// 重新导出证书相关类型
+pub use cert::{
     create_certificate, export_certificate, import_certificate, parse_certificate,
     sign_certificate, verify_certificate, CertificateInfo, CertificateSubject, X509Certificate,
 };
@@ -32,5 +34,5 @@ pub mod prelude {
         store::CertificateStore,
         types::{CertificateStatus, RevocationReason},
     };
-    pub use capsula_crypto::{create_certificate, CertificateSubject, X509Certificate};
+    pub use crate::cert::{create_certificate, CertificateSubject, X509Certificate};
 }

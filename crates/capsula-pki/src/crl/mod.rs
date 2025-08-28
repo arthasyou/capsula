@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use capsula_crypto::{DigitalSignature, EccKeyPair, X509Certificate};
+use crate::{
+    cert::X509Certificate,
+    key::KeyPair as EccKeyPair,
+};
+use capsula_key::{DigitalSignature, LocationInfo};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -132,7 +136,7 @@ impl CertificateRevocationList {
         let data = serde_json::to_vec(&crl_data)?;
 
         // 创建签名
-        let location_info = capsula_crypto::signature::ecc::LocationInfo::default();
+        let location_info = LocationInfo::default();
         let signature = ca_keypair
             .sign_data(
                 &data,
@@ -164,7 +168,7 @@ impl CertificateRevocationList {
 
         // 验证签名
         let is_valid =
-            capsula_crypto::signature::ecc::verify_signature_standalone(&data, signature)
+            capsula_key::verify_signature_standalone(&data, signature)
                 .map_err(|e| PkiError::CRLError(format!("Failed to verify CRL signature: {e}")))?;
 
         Ok(is_valid)
@@ -282,10 +286,10 @@ impl CRLManager {
 
 #[cfg(test)]
 mod tests {
-    use capsula_crypto::EccKeyPair;
+    use crate::key::KeyPair as EccKeyPair;
 
     use super::*;
-    use capsula_crypto::{create_certificate, CertificateSubject};
+    use crate::cert::{create_certificate, CertificateSubject};
 
     #[test]
     fn test_crl_basic_operations() {
@@ -321,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_crl_signing() {
-        let ca_keypair = EccKeyPair::generate_keypair().unwrap();
+        let ca_keypair = EccKeyPair::generate().unwrap();
         let ca_subject = CertificateSubject::new("Test CA".to_string());
         let ca_cert = create_certificate(&ca_keypair, ca_subject, None, 3650, true).unwrap();
 
@@ -342,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_crl_manager() {
-        let ca_keypair = EccKeyPair::generate_keypair().unwrap();
+        let ca_keypair = EccKeyPair::generate().unwrap();
         let mut manager = CRLManager::new(
             "Test CA".to_string(),
             ca_keypair,

@@ -9,13 +9,12 @@
 
 use std::collections::HashMap;
 
-use capsula_crypto::{
-    signature::ecc::{verify_signature_standalone, LocationInfo},
-    CertificateSubject, EccKeyPair, X509Certificate,
-};
+use capsula_key::{verify_signature_standalone, LocationInfo};
 use capsula_pki::{
     ca::{CAConfig, CertificateAuthority},
+    cert::{export_certificate, CertificateSubject, X509Certificate},
     chain::{build_certificate_chain, ChainValidator},
+    key::KeyPair as EccKeyPair,
     prelude::*,
 };
 
@@ -109,7 +108,7 @@ fn main() -> Result<()> {
 
     // 2. 签发医生证书
     println!("2. 签发医生证书");
-    let doctor_keypair = EccKeyPair::generate_keypair()?;
+    let doctor_keypair = EccKeyPair::generate()?;
     let doctor_subject = CertificateSubject {
         common_name: "Dr. Li Ming".to_string(),
         country: Some("CN".to_string()),
@@ -147,7 +146,7 @@ fn main() -> Result<()> {
 
     // 3. 签发患者证书
     println!("3. 签发患者证书");
-    let patient_keypair = EccKeyPair::generate_keypair()?;
+    let patient_keypair = EccKeyPair::generate()?;
     let patient_subject = CertificateSubject {
         common_name: "Zhang San".to_string(),
         country: Some("CN".to_string()),
@@ -245,7 +244,8 @@ fn main() -> Result<()> {
     println!("6. 患者验证医生的签名");
 
     // 方法1: 使用独立验证函数（不需要医生的密钥对）
-    let is_signature_valid = verify_signature_standalone(&report_data, &digital_signature)?;
+    let is_signature_valid = verify_signature_standalone(&report_data, &digital_signature)
+        .map_err(|e| PkiError::SignatureError(e.to_string()))?;
     println!(
         "  ✓ 签名验证结果: {}",
         if is_signature_valid {
@@ -311,7 +311,8 @@ fn main() -> Result<()> {
     tampered_report.diagnosis = "检测到严重心脏疾病，需要立即住院治疗。".to_string();
     let tampered_data = tampered_report.to_bytes();
 
-    let is_tampered_valid = verify_signature_standalone(&tampered_data, &digital_signature)?;
+    let is_tampered_valid = verify_signature_standalone(&tampered_data, &digital_signature)
+        .map_err(|e| PkiError::SignatureError(e.to_string()))?;
     println!(
         "  ✓ 篡改数据的签名验证结果: {}",
         if is_tampered_valid {
@@ -324,7 +325,7 @@ fn main() -> Result<()> {
 
     // 9. 导出证书供其他系统使用
     println!("9. 导出证书");
-    let doctor_cert_pem = capsula_crypto::export_certificate(&doctor.certificate, "PEM")?;
+    let doctor_cert_pem = export_certificate(&doctor.certificate, "PEM")?;
     println!("  ✓ 医生证书已导出为PEM格式");
     println!("    长度: {} 字节", doctor_cert_pem.len());
 

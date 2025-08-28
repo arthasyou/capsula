@@ -9,7 +9,6 @@ description = "数据胶囊API服务库"
 
 [dependencies]
 capsula-core = { workspace = true }
-capsula-crypto = { workspace = true }
 capsula-pki = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

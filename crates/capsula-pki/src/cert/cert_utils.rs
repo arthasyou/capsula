@@ -1,10 +1,11 @@
-use crate::key::ecc::EccKeyPair;
+use crate::key::KeyPair as EccKeyPair;
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
 use time::{Duration, OffsetDateTime};
 use x509_cert::der::Decode;
 
 use super::types::{CertificateInfo, CertificateSubject, X509Certificate};
-use crate::error::{Error, Result};
+use crate::error::PkiError;
+use crate::error::Result;
 
 /// 创建数字证书
 ///
@@ -25,7 +26,7 @@ pub fn create_certificate(
     is_ca: bool,
 ) -> Result<X509Certificate> {
     let mut params = CertificateParams::new(vec![subject.common_name.clone()])
-        .map_err(|e| Error::GenerationError(format!("Failed to create params: {e}")))?;
+        .map_err(|e| PkiError::GenerationError(format!("Failed to create params: {e}")))?;
 
     // 设置证书主体信息
     let mut dn = DistinguishedName::new();
@@ -67,7 +68,7 @@ pub fn create_certificate(
     // 设置序列号
     let mut serial_number = [0u8; 16];
     getrandom::fill(&mut serial_number)
-        .map_err(|e| Error::GenerationError(format!("Failed to generate serial number: {e}")))?;
+        .map_err(|e| PkiError::GenerationError(format!("Failed to generate serial number: {e}")))?;
     params.serial_number = Some(serial_number.to_vec().into());
 
     // 设置密钥用途
@@ -96,12 +97,12 @@ pub fn create_certificate(
     // 使用私钥 PKCS8 PEM 格式创建 KeyPair
     let private_key_pem = keypair.export_private_key()?;
     let key_pair = KeyPair::from_pkcs8_pem_and_sign_algo(&private_key_pem, &rcgen::PKCS_ED25519)
-        .map_err(|e| Error::GenerationError(format!("Failed to create key pair: {e}")))?;
+        .map_err(|e| PkiError::GenerationError(format!("Failed to create key pair: {e}")))?;
 
     // 生成证书
     let cert = params
         .self_signed(&key_pair)
-        .map_err(|e| Error::GenerationError(format!("Failed to create certificate: {e}")))?;
+        .map_err(|e| PkiError::GenerationError(format!("Failed to create certificate: {e}")))?;
 
     // 序列化证书
     let der_data = cert.der().to_vec();
@@ -113,7 +114,7 @@ pub fn create_certificate(
         issuer: issuer.unwrap_or(subject),
         not_before: not_before_adjusted,
         not_after,
-        public_key: keypair.get_public_key_bytes(),
+        public_key: keypair.public_key_bytes().to_vec(),
         key_usage: if is_ca {
             vec![
                 "KeyCertSign".to_string(),
@@ -151,11 +152,11 @@ pub fn sign_certificate(
 ) -> Result<X509Certificate> {
     // 验证CA证书
     if !ca_cert.info.is_ca {
-        return Err(Error::SigningError("Not a CA certificate".to_string()));
+        return Err(PkiError::SigningError("Not a CA certificate".to_string()));
     }
 
     if !ca_cert.info.is_currently_valid() {
-        return Err(Error::CertificateExpired);
+        return Err(PkiError::CertificateExpired);
     }
 
     // TODO: 实现真正的CA签名逻辑
@@ -178,9 +179,9 @@ pub fn verify_certificate(
     // 检查证书有效期
     if !cert.info.is_currently_valid() {
         if cert.info.not_after < OffsetDateTime::now_utc() {
-            return Err(Error::CertificateExpired);
+            return Err(PkiError::CertificateExpired);
         } else {
-            return Err(Error::CertificateNotYetValid);
+            return Err(PkiError::CertificateNotYetValid);
         }
     }
 
@@ -201,7 +202,7 @@ pub fn parse_certificate(cert_data: &[u8]) -> Result<CertificateInfo> {
     // 尝试解析PEM格式
     let der_data = if cert_data.starts_with(b"-----BEGIN CERTIFICATE-----") {
         pem::parse(cert_data)
-            .map_err(|e| Error::ParseError(format!("Failed to parse PEM: {e}")))?
+            .map_err(|e| PkiError::ParseError(format!("Failed to parse PEM: {e}")))?
             .contents()
             .to_vec()
     } else {
@@ -210,7 +211,7 @@ pub fn parse_certificate(cert_data: &[u8]) -> Result<CertificateInfo> {
 
     // 解析DER格式证书
     let cert = x509_cert::Certificate::from_der(&der_data)
-        .map_err(|e| Error::ParseError(format!("Failed to parse DER: {e}")))?;
+        .map_err(|e| PkiError::ParseError(format!("Failed to parse DER: {e}")))?;
 
     // 提取证书信息
     let serial_number = hex::encode(cert.tbs_certificate.serial_number.as_bytes());
@@ -277,7 +278,7 @@ pub fn export_certificate(cert: &X509Certificate, format: &str) -> Result<Vec<u8
             let pem_string = pem::encode(&pem);
             Ok(pem_string.into_bytes())
         }
-        _ => Err(Error::ExportError(format!(
+        _ => Err(PkiError::ExportError(format!(
             "Unsupported format: {format}"
         ))),
     }
@@ -296,7 +297,7 @@ pub fn import_certificate(cert_data: &[u8]) -> Result<X509Certificate> {
     // 确定是DER还是PEM格式
     let der_data = if cert_data.starts_with(b"-----BEGIN CERTIFICATE-----") {
         pem::parse(cert_data)
-            .map_err(|e| Error::ImportError(format!("Failed to parse PEM: {e}")))?
+            .map_err(|e| PkiError::ImportError(format!("Failed to parse PEM: {e}")))?
             .contents()
             .to_vec()
     } else {
@@ -335,13 +336,13 @@ fn parse_time(time: &x509_cert::time::Time) -> Result<OffsetDateTime> {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::ecc::EccKeyPair;
+    use crate::key::KeyPair as EccKeyPair;
 
     use super::*;
 
     #[test]
     fn test_create_self_signed_certificate() {
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
 
         let subject = CertificateSubject::medical_institution(
             "Shanghai First People Hospital".to_string(),
@@ -354,13 +355,13 @@ mod tests {
         let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
 
         assert!(cert.info.is_currently_valid());
-        assert_eq!(cert.info.public_key, keypair.get_public_key_bytes());
+        assert_eq!(cert.info.public_key, keypair.public_key_bytes().to_vec());
         assert!(!cert.info.is_ca);
     }
 
     #[test]
     fn test_create_ca_certificate() {
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
 
         let subject = CertificateSubject::new("Test CA".to_string());
 
@@ -373,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_export_import_certificate() {
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
         let subject = CertificateSubject::new("Test Certificate".to_string());
         let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
 
@@ -390,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_verify_certificate_validity() {
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
         let subject = CertificateSubject::new("Test Certificate".to_string());
         let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
 

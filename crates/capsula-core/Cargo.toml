@@ -8,7 +8,6 @@ repository.workspace = true
 description = "数据胶囊核心功能库"
 
 [dependencies]
-capsula-crypto = { workspace = true }
 capsula-pki = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

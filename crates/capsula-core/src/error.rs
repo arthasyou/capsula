@@ -5,10 +5,6 @@ use thiserror::Error;
 /// 核心错误类型
 #[derive(Error, Debug)]
 pub enum CoreError {
-    /// 加密错误
-    #[error("Crypto error: {0}")]
-    CryptoError(#[from] capsula_crypto::Error),
-
     /// PKI错误
     #[error("PKI error: {0}")]
     PkiError(#[from] capsula_pki::PkiError),

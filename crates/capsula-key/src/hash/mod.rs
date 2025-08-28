@@ -18,7 +18,7 @@ pub enum HashAlgorithm {
 ///
 /// # Example
 /// ```rust
-/// use capsula_crypto::hash::{hash_data, HashAlgorithm};
+/// use capsula_key::hash::{hash_data, HashAlgorithm};
 ///
 /// let data = b"Hello, World!";
 /// let hash = hash_data(data, HashAlgorithm::Sha256);

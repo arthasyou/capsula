@@ -7,9 +7,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/ancient/capsula"
 description = "数据胶囊 - 安全的数据封装和管理系统"
 
-[[example]]
-name = "basic_crypto"
-path = "examples/basic_crypto.rs"
 
 [[example]]
 name = "pki_demo"
@@ -24,7 +21,6 @@ name = "storage_demo"
 path = "examples/storage_demo.rs"
 
 [dependencies]
-capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
@@ -44,9 +40,7 @@ time = { version = "0.3", features = [
 [workspace]
 resolver = "2"
 members = [
-    "crates/capsula-crypto",
     "crates/capsula-pki",
-    "crates/capsula-core",
     "crates/capsula-api",
     "crates/capsula-cli",
     "crates/capsula-key",
@@ -61,7 +55,6 @@ repository = "https://github.com/ancient/capsula"
 
 [workspace.dependencies]
 # 内部 crates
-capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }

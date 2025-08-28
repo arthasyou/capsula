@@ -2,8 +2,13 @@
 
 use std::fs;
 
-use capsula_crypto::{hash_data_hex, EccKeyPair, HashAlgorithm, LocationInfo};
-use capsula_pki::{CAConfig, CertificateAuthority, CertificateStore, CertificateSubject};
+use capsula_key::{
+    hash_data_hex, verify_signature_standalone, DigitalSignature, HashAlgorithm, LocationInfo,
+};
+use capsula_pki::{
+    key::KeyPair as EccKeyPair, CAConfig, CertificateAuthority, CertificateStore,
+    CertificateSubject,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -45,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. 为医生创建证书
     println!("\n2. 创建医生身份证书");
-    let doctor_keypair = EccKeyPair::generate_keypair()?;
+    let doctor_keypair = EccKeyPair::generate()?;
     let doctor_subject = CertificateSubject::doctor(
         "Dr. Li".to_string(),
         "DOC20240001".to_string(),
@@ -131,9 +136,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 验证签名
-    let signature_obj = capsula_crypto::DigitalSignature::from_json(&capsule.signature)?;
-    let signature_valid =
-        doctor_keypair.verify_signature(&capsule.encrypted_data, &signature_obj)?;
+    let signature_obj = DigitalSignature::from_json(&capsule.signature)?;
+    let signature_valid = verify_signature_standalone(&capsule.encrypted_data, &signature_obj)?;
     println!(
         "✓ 签名验证: {}",
         if signature_valid { "通过" } else { "失败" }

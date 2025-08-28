@@ -13,5 +13,4 @@
 // Re-export all sub-crates
 pub use capsula_api;
 pub use capsula_core;
-pub use capsula_crypto;
 pub use capsula_pki;

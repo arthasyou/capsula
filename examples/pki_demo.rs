@@ -2,10 +2,10 @@
 
 use std::fs;
 
-use capsula_crypto::EccKeyPair;
 use capsula_pki::{
     build_certificate_chain, CAConfig, CRLManager, CertificateAuthority, CertificateStore,
     CertificateSubject, ChainValidator, RevocationReason,
+    key::KeyPair as EccKeyPair,
 };
 use time::OffsetDateTime;
 
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. 签发终端实体证书");
 
     // 医疗机构证书
-    let hospital_keypair = EccKeyPair::generate_keypair()?;
+    let hospital_keypair = EccKeyPair::generate()?;
     let hospital_subject = CertificateSubject::medical_institution(
         "Shanghai First Hospital".to_string(),
         Some("IT Department".to_string()),
@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - 有效期: 365 天");
 
     // 医生证书
-    let doctor_keypair = EccKeyPair::generate_keypair()?;
+    let doctor_keypair = EccKeyPair::generate()?;
     let doctor_subject = CertificateSubject::doctor(
         "Dr. Zhang".to_string(),
         "DOCTOR001".to_string(),
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. CRL 管理
     println!("\n3. 证书撤销列表 (CRL) 管理");
-    let crl_ca_keypair = EccKeyPair::generate_keypair()?;
+    let crl_ca_keypair = EccKeyPair::generate()?;
     let mut crl_manager = CRLManager::new(
         "Shanghai Regional Medical CA".to_string(),
         crl_ca_keypair,

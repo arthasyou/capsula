@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use capsula_crypto::{export_certificate, import_certificate, X509Certificate};
+use crate::cert::{export_certificate, import_certificate, X509Certificate};
 use time::OffsetDateTime;
 
 use crate::{
@@ -306,11 +306,11 @@ impl CertificateStore {
 
 #[cfg(test)]
 mod tests {
-    use capsula_crypto::EccKeyPair;
+    use crate::key::KeyPair as EccKeyPair;
     use tempfile::TempDir;
 
     use super::*;
-    use capsula_crypto::{create_certificate, CertificateSubject};
+    use crate::cert::{create_certificate, CertificateSubject};
 
     #[test]
     #[ignore = "Certificate parsing is not fully implemented yet"]
@@ -319,7 +319,7 @@ mod tests {
         let mut backend = FileSystemBackend::new(temp_dir.path()).unwrap();
 
         // 创建测试证书
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
         let subject = CertificateSubject::new("Test Certificate".to_string());
         let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
         let serial = &cert.info.serial_number;
@@ -347,7 +347,7 @@ mod tests {
         let mut store = CertificateStore::file_system(temp_dir.path()).unwrap();
 
         // 创建测试证书
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
         let subject = CertificateSubject::new("Test Certificate".to_string());
         let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
         let serial = cert.info.serial_number.clone();

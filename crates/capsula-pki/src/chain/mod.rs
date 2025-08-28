@@ -2,7 +2,7 @@ use time::OffsetDateTime;
 
 use super::crl::CertificateRevocationList;
 use crate::error::{PkiError, Result as PkiResult};
-use capsula_crypto::X509Certificate;
+use crate::cert::X509Certificate;
 
 /// 证书链验证结果
 #[derive(Debug, Clone)]
@@ -311,11 +311,11 @@ pub fn build_certificate_chain(
 
 #[cfg(test)]
 mod tests {
-    use capsula_crypto::EccKeyPair;
+    use crate::key::KeyPair as EccKeyPair;
 
     use super::*;
     use crate::ca::{CAConfig, CertificateAuthority};
-    use capsula_crypto::{create_certificate, CertificateSubject};
+    use crate::cert::{create_certificate, CertificateSubject};
 
     #[test]
     fn test_chain_validation() {
@@ -332,7 +332,7 @@ mod tests {
         let mut intermediate_ca = root_ca.create_intermediate_ca(intermediate_config).unwrap();
 
         // 创建终端实体证书
-        let end_entity_keypair = EccKeyPair::generate_keypair().unwrap();
+        let end_entity_keypair = EccKeyPair::generate().unwrap();
         let end_entity_subject = CertificateSubject::new("End Entity".to_string());
         let end_entity_cert = intermediate_ca
             .issue_certificate(end_entity_subject, &end_entity_keypair, None, false)
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_expired_certificate_validation() {
-        let keypair = EccKeyPair::generate_keypair().unwrap();
+        let keypair = EccKeyPair::generate().unwrap();
         let subject = CertificateSubject::new("Test Certificate".to_string());
 
         // 创建一个即将过期的证书（有效期为20天，小于30天警告阈值）
@@ -389,7 +389,7 @@ mod tests {
         let mut intermediate_ca = root_ca.create_intermediate_ca(intermediate_config).unwrap();
 
         // 创建终端实体证书
-        let end_entity_keypair = EccKeyPair::generate_keypair().unwrap();
+        let end_entity_keypair = EccKeyPair::generate().unwrap();
         let end_entity_subject = CertificateSubject::new("End Entity".to_string());
         let end_entity_cert = intermediate_ca
             .issue_certificate(end_entity_subject, &end_entity_keypair, None, false)
