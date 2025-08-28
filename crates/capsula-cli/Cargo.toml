@@ -12,10 +12,15 @@ name = "capsula"
 path = "src/main.rs"
 
 [dependencies]
-capsula-api = { workspace = true }
-capsula-core = { workspace = true }
-capsula-pki = { workspace = true }
+capsula-key = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+directories = "6.0"
+colored = "3.0"
+hex = { workspace = true }
+rand = "0.8"
+ed25519-dalek = { workspace = true }
+sha2 = { workspace = true }

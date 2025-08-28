@@ -244,8 +244,7 @@ fn main() -> Result<()> {
     println!("6. 患者验证医生的签名");
 
     // 方法1: 使用独立验证函数（不需要医生的密钥对）
-    let is_signature_valid = verify_signature_standalone(&report_data, &digital_signature)
-        .map_err(|e| PkiError::SignatureError(e.to_string()))?;
+    let is_signature_valid = verify_signature_standalone(&report_data, &digital_signature)?;
     println!(
         "  ✓ 签名验证结果: {}",
         if is_signature_valid {
@@ -311,8 +310,7 @@ fn main() -> Result<()> {
     tampered_report.diagnosis = "检测到严重心脏疾病，需要立即住院治疗。".to_string();
     let tampered_data = tampered_report.to_bytes();
 
-    let is_tampered_valid = verify_signature_standalone(&tampered_data, &digital_signature)
-        .map_err(|e| PkiError::SignatureError(e.to_string()))?;
+    let is_tampered_valid = verify_signature_standalone(&tampered_data, &digital_signature)?;
     println!(
         "  ✓ 篡改数据的签名验证结果: {}",
         if is_tampered_valid {
