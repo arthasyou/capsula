@@ -44,6 +44,7 @@ members = [
     "crates/capsula-api",
     "crates/capsula-cli",
     "crates/capsula-key",
+    "crates/capsula-wasm",
 ]
 
 [workspace.package]
@@ -89,3 +90,4 @@ chacha20poly1305 = { version = "0.10", features = ["std"] }
 
 # 开发依赖
 tempfile = "3.12"
+

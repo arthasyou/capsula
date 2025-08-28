@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capsula WASM 示例</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Capsula WASM 示例</h1>
+
+    <div class="section">
+        <h2>1. 密钥管理</h2>
+        <button onclick="generateKeyPair()">生成密钥对</button>
+        <button onclick="exportKeys()">导出密钥</button>
+        <pre id="keyOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>2. 哈希计算</h2>
+        <input type="text" id="hashInput" placeholder="输入要哈希的文本" style="width: 300px;">
+        <button onclick="calculateHash()">计算 SHA256</button>
+        <pre id="hashOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>3. 签名和验证</h2>
+        <textarea id="signInput" placeholder="输入要签名的文本" rows="3" style="width: 100%;"></textarea>
+        <br>
+        <button onclick="signData()">签名数据</button>
+        <button onclick="verifySignature()">验证签名</button>
+        <pre id="signOutput"></pre>
+    </div>
+
+    <script type="module">
+        import init, {
+            KeyPair,
+            PublicKey,
+            Location,
+            sha256Hex,
+            sha512Hex,
+            signWithExtendedInfo,
+            verifySignature as wasmVerifySignature,
+            parseSignature,
+            signatureToJson,
+            version
+        } from './pkg/capsula_wasm.js';
+
+        let keyPair = null;
+        let currentSignature = null;
+
+        async function initialize() {
+            await init();
+            document.getElementById('keyOutput').textContent = `Capsula WASM v${version()} 已加载`;
+        }
+
+        window.generateKeyPair = function() {
+            try {
+                keyPair = new KeyPair();
+                document.getElementById('keyOutput').textContent = '✓ 密钥对已生成';
+                document.getElementById('keyOutput').className = 'success';
+            } catch (e) {
+                document.getElementById('keyOutput').textContent = `错误: ${e}`;
+                document.getElementById('keyOutput').className = 'error';
+            }
+        }
+
+        window.exportKeys = function() {
+            if (!keyPair) {
+                alert('请先生成密钥对');
+                return;
+            }
+            try {
+                const privateKeyPem = keyPair.exportPrivateKeyPem();
+                const publicKeyPem = keyPair.exportPublicKeyPem();
+                const publicKeyBytes = keyPair.publicKeyBytes();
+                
+                document.getElementById('keyOutput').textContent = 
+                    `私钥 PEM:\n${privateKeyPem}\n\n` +
+                    `公钥 PEM:\n${publicKeyPem}\n\n` +
+                    `公钥字节 (hex): ${Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+                document.getElementById('keyOutput').className = '';
+            } catch (e) {
+                document.getElementById('keyOutput').textContent = `错误: ${e}`;
+                document.getElementById('keyOutput').className = 'error';
+            }
+        }
+
+        window.calculateHash = function() {
+            const input = document.getElementById('hashInput').value;
+            if (!input) {
+                alert('请输入文本');
+                return;
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(input);
+                
+                const sha256 = sha256Hex(data);
+                const sha512 = sha512Hex(data);
+                
+                document.getElementById('hashOutput').textContent = 
+                    `SHA256: ${sha256}\n\n` +
+                    `SHA512: ${sha512}`;
+                document.getElementById('hashOutput').className = '';
+            } catch (e) {
+                document.getElementById('hashOutput').textContent = `错误: ${e}`;
+                document.getElementById('hashOutput').className = 'error';
+            }
+        }
+
+        window.signData = function() {
+            if (!keyPair) {
+                alert('请先生成密钥对');
+                return;
+            }
+            
+            const input = document.getElementById('signInput').value;
+            if (!input) {
+                alert('请输入要签名的文本');
+                return;
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(input);
+                
+                // 创建位置信息
+                const location = new Location();
+                location.setAddress("Beijing, China");
+                location.setLatitude(39.9042);
+                location.setLongitude(116.4074);
+                
+                // 签名
+                currentSignature = signWithExtendedInfo(
+                    keyPair,
+                    data,
+                    location,
+                    "WASM Demo User",
+                    "Demo Signature"
+                );
+                
+                // 转换为 JSON
+                const signatureJson = signatureToJson(currentSignature);
+                
+                document.getElementById('signOutput').textContent = 
+                    `✓ 签名成功\n\n` +
+                    `签名 JSON:\n${signatureJson}`;
+                document.getElementById('signOutput').className = 'success';
+            } catch (e) {
+                document.getElementById('signOutput').textContent = `错误: ${e}`;
+                document.getElementById('signOutput').className = 'error';
+            }
+        }
+
+        window.verifySignature = function() {
+            if (!currentSignature) {
+                alert('请先签名数据');
+                return;
+            }
+            
+            const input = document.getElementById('signInput').value;
+            if (!input) {
+                alert('请输入要验证的文本');
+                return;
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(input);
+                
+                const isValid = wasmVerifySignature(data, currentSignature);
+                
+                document.getElementById('signOutput').textContent = 
+                    isValid ? '✓ 签名验证通过' : '✗ 签名验证失败';
+                document.getElementById('signOutput').className = isValid ? 'success' : 'error';
+            } catch (e) {
+                document.getElementById('signOutput').textContent = `错误: ${e}`;
+                document.getElementById('signOutput').className = 'error';
+            }
+        }
+
+        // 初始化
+        initialize();
+    </script>
+</body>
+</html>
