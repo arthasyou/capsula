@@ -1,4 +1,3 @@
-pub mod alg;
 pub mod encoding;
 pub mod error;
 pub mod impls;
