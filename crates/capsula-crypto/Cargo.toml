@@ -1,0 +1,32 @@
+[package]
+name = "capsula-crypto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Ed25519 signatures
+ed25519-dalek = { workspace = true }
+
+# X25519 key exchange
+x25519-dalek = { workspace = true, features = ["pkcs8"] }
+
+# P256 (NIST P-256/secp256r1) 
+p256 = { workspace = true, features = ["ecdsa"] }
+
+# PEM encoding
+pem = { workspace = true }
+
+# SHA256 hashing
+sha2 = { workspace = true }
+
+# Random number generation
+getrandom = { workspace = true }
+
+# Encoding
+hex = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
