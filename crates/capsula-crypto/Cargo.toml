@@ -20,6 +20,7 @@ ed25519-dalek = { workspace = true, features = [
 x25519-dalek = { workspace = true, features = ["static_secrets", "zeroize"] }
 p256 = { workspace = true, features = ["ecdsa"] }
 pkcs8 = { workspace = true }
+hkdf = { workspace = true }
 
 # PEM encoding
 pem = { workspace = true }

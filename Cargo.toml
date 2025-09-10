@@ -103,6 +103,7 @@ getrandom = "0.3"
 sha2 = "0.10"
 signature = "2.2"
 base64 = "0.22.1"
+hkdf = "0.12.4"
 
 # 证书相关
 rcgen = { version = "0.14", features = ["pem"] }

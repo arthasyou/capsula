@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use capsula_crypto::{ed25519::Ed25519, x25519::X25519};
+use capsula_crypto::{Ed25519, X25519};
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -87,7 +87,7 @@ impl Key {
     /// Verify an Ed25519 signature
     pub fn verify(&self, message: &[u8], signature: &[u8; 64]) -> bool {
         let public_key = self.ed25519_public_key();
-        capsula_crypto::ed25519::verify(&public_key.to_bytes(), message, signature)
+        capsula_crypto::asymmetric::ed25519::verify(&public_key.to_bytes(), message, signature)
     }
 
     /// Compute X25519 shared secret with another party's public key

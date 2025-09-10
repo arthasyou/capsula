@@ -1,4 +1,4 @@
-use capsula_crypto::x25519::X25519;
+use capsula_crypto::X25519;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== X25519 Advanced Features Demo ===\n");
@@ -81,11 +81,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 8. Public key import
     println!("8. Public Key Import:");
-    let public_key = capsula_crypto::x25519::public_key_from_spki_pem(&alice_public_pem)?;
+    let public_key = capsula_crypto::asymmetric::x25519::public_key_from_spki_pem(&alice_public_pem)?;
     assert_eq!(alice.public_key().to_bytes(), public_key.to_bytes());
     println!("   ✓ Successfully imported public key from PEM");
     
-    let public_key_der = capsula_crypto::x25519::public_key_from_spki_der(&alice_public_der)?;
+    let public_key_der = capsula_crypto::asymmetric::x25519::public_key_from_spki_der(&alice_public_der)?;
     assert_eq!(alice.public_key().to_bytes(), public_key_der.to_bytes());
     println!("   ✓ Successfully imported public key from DER\n");
 

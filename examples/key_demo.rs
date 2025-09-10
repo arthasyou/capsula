@@ -1,4 +1,4 @@
-use capsula_crypto::x25519::X25519;
+use capsula_crypto::X25519;
 use capsula_key::key::{Key, PublicKeyInfo};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
