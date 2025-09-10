@@ -54,7 +54,7 @@ impl Key {
         let ed25519_bytes = ed25519.to_seed_bytes();
         let mut hasher = Sha256::new();
         hasher.update(b"capsula-x25519-derivation");
-        hasher.update(&ed25519_bytes);
+        hasher.update(ed25519_bytes);
         let x25519_seed: [u8; 32] = hasher.finalize().into();
 
         let x25519 = X25519::from_raw_seed(&x25519_seed);
@@ -98,8 +98,8 @@ impl Key {
     /// Get a unique identifier for this key (first 8 bytes of SHA256 of public keys)
     pub fn key_id(&self) -> [u8; 8] {
         let mut hasher = Sha256::new();
-        hasher.update(&self.ed25519_public_key().to_bytes());
-        hasher.update(&self.x25519_public_key());
+        hasher.update(self.ed25519_public_key().to_bytes());
+        hasher.update(self.x25519_public_key());
         let hash = hasher.finalize();
         let mut id = [0u8; 8];
         id.copy_from_slice(&hash[.. 8]);
@@ -120,7 +120,7 @@ impl Key {
     /// Result indicating success or failure
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let pem = self.to_pem()?;
-        fs::write(path, pem).map_err(|e| Error::IoError(e))
+        fs::write(path, pem).map_err(Error::IoError)
     }
 
     /// Load a private key from a PEM file
@@ -131,7 +131,7 @@ impl Key {
     /// # Returns
     /// Key instance loaded from the file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let pem = fs::read_to_string(path).map_err(|e| Error::IoError(e))?;
+        let pem = fs::read_to_string(path).map_err(Error::IoError)?;
         Self::from_pem(&pem)
     }
 
@@ -158,7 +158,7 @@ impl Key {
     /// Result indicating success or failure
     pub fn save_ed25519_public_key_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let pem = self.export_ed25519_public_key_to_pem()?;
-        fs::write(path, pem).map_err(|e| Error::IoError(e))
+        fs::write(path, pem).map_err(Error::IoError)
     }
 
     /// Save the X25519 public key to a PEM file
@@ -170,7 +170,7 @@ impl Key {
     /// Result indicating success or failure
     pub fn save_x25519_public_key_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let pem = self.export_x25519_public_key_to_pem()?;
-        fs::write(path, pem).map_err(|e| Error::IoError(e))
+        fs::write(path, pem).map_err(Error::IoError)
     }
 
     /// Save the public key information to a JSON file (for backward compatibility)
@@ -184,7 +184,7 @@ impl Key {
         let public_info = PublicKeyInfo::from(self);
         let json = serde_json::to_string_pretty(&public_info)
             .map_err(|e| Error::EncodingError(format!("Failed to serialize public key: {}", e)))?;
-        fs::write(path, json).map_err(|e| Error::IoError(e))
+        fs::write(path, json).map_err(Error::IoError)
     }
 
     /// Load public key information from a JSON file
@@ -195,7 +195,7 @@ impl Key {
     /// # Returns
     /// PublicKeyInfo loaded from the file
     pub fn load_public_key_info_from_file<P: AsRef<Path>>(path: P) -> Result<PublicKeyInfo> {
-        let json = fs::read_to_string(path).map_err(|e| Error::IoError(e))?;
+        let json = fs::read_to_string(path).map_err(Error::IoError)?;
         serde_json::from_str(&json)
             .map_err(|e| Error::EncodingError(format!("Failed to deserialize public key: {}", e)))
     }
