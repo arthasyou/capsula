@@ -23,18 +23,18 @@ use crate::error::{Error, Result};
 /// # Examples
 ///
 /// ```no_run
-/// use capsula_key::key::Key;
+/// use capsula_key::key::{verify, Key};
 ///
 /// // Generate a new random key
-/// let key = Key::generate();
+/// let key = Key::generate().unwrap();
 ///
 /// // Sign a message
 /// let message = b"Hello, World!";
 /// let signature = key.sign(message);
-/// assert!(key.verify(message, &signature));
+/// assert!(verify(&key.ed25519_public_key_bytes(), message, &signature));
 ///
 /// // Perform key exchange
-/// let other_key = Key::generate();
+/// let other_key = Key::generate().unwrap();
 /// let shared_secret = key.compute_shared_secret(&other_key.x25519_public_key());
 /// ```
 pub struct Key {
