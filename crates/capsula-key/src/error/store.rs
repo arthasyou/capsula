@@ -1,5 +1,5 @@
 use super::Error;
-use crate::types::KeyHandle;
+use crate::store::KeyHandle;
 
 /// 存储相关的错误扩展
 impl Error {

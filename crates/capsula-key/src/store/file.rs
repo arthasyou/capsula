@@ -1,6 +1,5 @@
-use super::{KeyMetadata, KeyStore};
+use super::{KeyMetadata, KeyStore, KeyHandle};
 use crate::error::{Error, Result};
-use crate::types::KeyHandle;
 use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,
@@ -196,7 +195,7 @@ impl KeyStore for FileKeyStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Algorithm;
+    use crate::store::Algorithm;
     use tempfile::TempDir;
     use std::collections::HashMap;
     

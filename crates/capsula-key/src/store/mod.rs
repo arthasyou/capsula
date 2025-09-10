@@ -7,10 +7,18 @@ pub use hsm::HsmKeyStore;
 pub use memory::MemoryKeyStore;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    error::Result,
-    types::{Algorithm, KeyHandle},
-};
+use crate::error::Result;
+
+// Move types here since they're only used by store
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Algorithm {
+    Ed25519,
+    X25519,
+    P256,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct KeyHandle(pub u64);
 
 /// Key metadata stored alongside the key material
 #[derive(Clone, Debug, Serialize, Deserialize)]

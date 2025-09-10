@@ -25,11 +25,8 @@
 // - 需要适当的用户权限和PIN码
 // - 某些操作可能需要管理员权限
 
-use crate::{
-    error::Result,
-    store::{KeyMetadata, KeyStore},
-    types::KeyHandle,
-};
+use crate::error::Result;
+use super::{KeyMetadata, KeyStore, KeyHandle};
 /// HSM密钥存储实现
 pub struct HsmKeyStore {
     // TODO: 实现PKCS#11接口

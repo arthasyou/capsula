@@ -13,16 +13,9 @@ name = "pki_demo"
 path = "examples/pki_demo.rs"
 
 [[example]]
-name = "full_demo"
-path = "examples/full_demo.rs"
-
-[[example]]
 name = "key_demo"
 path = "examples/key_demo.rs"
 
-[[example]]
-name = "x25519_demo"
-path = "examples/x25519_demo.rs"
 
 [dependencies]
 capsula-pki = { path = "crates/capsula-pki" }

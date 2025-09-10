@@ -3,11 +3,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::{KeyMetadata, KeyStore};
-use crate::{
-    error::{Error, Result},
-    types::KeyHandle,
-};
+use super::{KeyMetadata, KeyStore, KeyHandle};
+use crate::error::{Error, Result};
 
 /// Type alias for the key storage map
 type KeyStorage = Arc<RwLock<HashMap<KeyHandle, (KeyMetadata, Vec<u8>)>>>;
@@ -105,7 +102,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::types::Algorithm;
+    use crate::store::Algorithm;
 
     #[test]
     fn test_memory_store_basic_operations() {

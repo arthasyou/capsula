@@ -1,11 +1,12 @@
-use crate::key::KeyPair as EccKeyPair;
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
 use time::{Duration, OffsetDateTime};
 use x509_cert::der::Decode;
 
 use super::types::{CertificateInfo, CertificateSubject, X509Certificate};
-use crate::error::PkiError;
-use crate::error::Result;
+use crate::{
+    error::{PkiError, Result},
+    key::KeyPair as EccKeyPair,
+};
 
 /// 创建数字证书
 ///
@@ -56,7 +57,7 @@ pub fn create_certificate(
 
     // 设置时间时减去一小时，确保证书立即生效
     let not_before_adjusted = not_before - Duration::hours(1);
-    
+
     params.not_before = rcgen::date_time_ymd(
         not_before_adjusted.year(),
         not_before_adjusted.month() as u8,
@@ -336,9 +337,8 @@ fn parse_time(time: &x509_cert::time::Time) -> Result<OffsetDateTime> {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::KeyPair as EccKeyPair;
-
     use super::*;
+    use crate::key::KeyPair as EccKeyPair;
 
     #[test]
     fn test_create_self_signed_certificate() {

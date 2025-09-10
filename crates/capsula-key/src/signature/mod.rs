@@ -140,13 +140,13 @@ pub fn verify_signature_standalone(
 mod tests {
     use std::time::UNIX_EPOCH;
 
+    use capsula_crypto::asymmetric::ed25519::Ed25519;
+
     use super::*;
-    use crate::{impls::ed25519::Ed25519Provider, provider::KeyProvider};
 
     #[test]
     fn test_sign_and_verify_with_location() {
-        let provider = Ed25519Provider::new().unwrap();
-        let handle = provider.generate().unwrap();
+        let key = Ed25519::generate().unwrap();
 
         let location = LocationInfo {
             latitude: Some(31.2304),
@@ -185,14 +185,14 @@ mod tests {
         sign_data.extend_from_slice(&extended_info_bytes);
 
         // 签名
-        let signature_bytes = provider.sign(handle, &sign_data).unwrap();
-        let public_key = provider.public_spki_der(handle).unwrap();
+        let signature_bytes = key.sign(&sign_data).to_vec();
+        let public_key_bytes = key.to_spki_der().unwrap();
 
         // 创建数字签名
         let digital_signature = DigitalSignature {
             signature: signature_bytes,
             extended_info,
-            public_key,
+            public_key: public_key_bytes,
         };
 
         // 独立验证
@@ -208,8 +208,7 @@ mod tests {
 
     #[test]
     fn test_signature_serialization() {
-        let provider = Ed25519Provider::new().unwrap();
-        let handle = provider.generate().unwrap();
+        let key = Ed25519::generate().unwrap();
 
         let location = LocationInfo {
             latitude: Some(31.2304),
@@ -243,13 +242,13 @@ mod tests {
         sign_data.extend_from_slice(&data_hash);
         sign_data.extend_from_slice(&extended_info_bytes);
 
-        let signature_bytes = provider.sign(handle, &sign_data).unwrap();
-        let public_key = provider.public_spki_der(handle).unwrap();
+        let signature_bytes = key.sign(&sign_data).to_vec();
+        let public_key_bytes = key.to_spki_der().unwrap();
 
         let signature = DigitalSignature {
             signature: signature_bytes,
             extended_info,
-            public_key,
+            public_key: public_key_bytes,
         };
 
         // 序列化为JSON
@@ -266,8 +265,7 @@ mod tests {
 
     #[test]
     fn test_invalid_signature() {
-        let provider = Ed25519Provider::new().unwrap();
-        let handle = provider.generate().unwrap();
+        let key = Ed25519::generate().unwrap();
 
         let data = b"original data";
         let tampered_data = "篡改数据".as_bytes();
@@ -293,13 +291,13 @@ mod tests {
         sign_data.extend_from_slice(&data_hash);
         sign_data.extend_from_slice(&extended_info_bytes);
 
-        let signature_bytes = provider.sign(handle, &sign_data).unwrap();
-        let public_key = provider.public_spki_der(handle).unwrap();
+        let signature_bytes = key.sign(&sign_data).to_vec();
+        let public_key_bytes = key.to_spki_der().unwrap();
 
         let signature = DigitalSignature {
             signature: signature_bytes,
             extended_info,
-            public_key,
+            public_key: public_key_bytes,
         };
 
         // 用篡改的数据验证应该失败

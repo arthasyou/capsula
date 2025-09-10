@@ -1,6 +1,4 @@
-pub mod generate;
-pub mod sign;
-pub mod verify;
-pub mod hash;
 pub mod export;
+pub mod generate;
 pub mod info;
+pub mod sign;
