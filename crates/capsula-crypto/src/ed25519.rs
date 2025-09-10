@@ -1,87 +1,133 @@
-//! Ed25519 signature algorithm implementation
-//!
-//! Simple, direct functions for Ed25519 operations.
+use base64::{engine::general_purpose, Engine as _};
+use ed25519_dalek::{
+    pkcs8::{DecodePrivateKey, EncodePrivateKey, EncodePublicKey},
+    Signature, Signer, SigningKey, Verifier, VerifyingKey,
+};
+use pkcs8::{DecodePublicKey, LineEnding};
+use sha2::{Digest, Sha256};
 
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use crate::error::{Error, Result};
 
-/// Generate a new Ed25519 keypair
-///
-/// Returns (private_key, public_key) as 32-byte arrays
-pub fn generate_keypair() -> ([u8; 32], [u8; 32]) {
-    let mut private_key = [0u8; 32];
-    getrandom::fill(&mut private_key).expect("failed to generate random bytes");
-
-    let signing_key = SigningKey::from_bytes(&private_key);
-    let verifying_key = signing_key.verifying_key();
-
-    (private_key, verifying_key.to_bytes())
+pub struct Ed25519 {
+    pub inner: SigningKey,
 }
 
-/// Generate an Ed25519 keypair from a seed
-///
-/// # Arguments
-/// * `seed` - A 32-byte seed for deterministic key generation
-///
-/// Returns (private_key, public_key) as 32-byte arrays
-pub fn generate_keypair_from_seed(seed: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
-    let signing_key = SigningKey::from_bytes(seed);
-    let verifying_key = signing_key.verifying_key();
-
-    (*seed, verifying_key.to_bytes())
+impl From<SigningKey> for Ed25519 {
+    fn from(value: SigningKey) -> Self {
+        Self { inner: value }
+    }
 }
 
-/// Sign a message with Ed25519
-///
-/// # Arguments
-/// * `private_key` - 32-byte private key
-/// * `message` - Message to sign
-///
-/// # Returns
-/// 64-byte signature
-pub fn sign(private_key: &[u8; 32], message: &[u8]) -> [u8; 64] {
-    let signing_key = SigningKey::from_bytes(private_key);
-    let signature = signing_key.sign(message);
-    signature.to_bytes()
+impl Ed25519 {
+    pub fn generate() -> Result<Self> {
+        let mut seed = [0u8; 32];
+        getrandom::fill(&mut seed).map_err(|e| Error::GetrandomError(e.to_string()))?;
+        Ok(SigningKey::from_bytes(&seed).into())
+    }
+
+    pub fn from_raw_seed(seed: &[u8; 32]) -> Self {
+        SigningKey::from_bytes(seed).into()
+    }
+
+    pub fn from_pkcs8_der(der: &[u8]) -> Result<Self> {
+        let signing_key = SigningKey::from_pkcs8_der(der)?;
+        Ok(signing_key.into())
+    }
+
+    pub fn from_pem(pem: &str) -> Result<Self> {
+        let signing_key = SigningKey::from_pkcs8_pem(pem)?;
+        Ok(signing_key.into())
+    }
 }
 
-/// Verify an Ed25519 signature
-///
-/// # Arguments
-/// * `public_key` - 32-byte public key
-/// * `message` - Original message
-/// * `signature` - 64-byte signature to verify
-///
-/// # Returns
-/// true if signature is valid, false otherwise
+impl Ed25519 {
+    /// Export the private key as raw bytes
+    pub fn to_seed_bytes(&self) -> [u8; 32] {
+        self.inner.to_bytes()
+    }
+
+    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
+        let der = self.inner.to_pkcs8_der()?;
+        Ok(der.as_bytes().to_vec())
+    }
+
+    pub fn to_spki_der(&self) -> Result<Vec<u8>> {
+        let der = self.inner.verifying_key().to_public_key_der()?;
+        Ok(der.as_bytes().to_vec())
+    }
+
+    pub fn to_pkcs8_pem(&self) -> Result<String> {
+        let pem = self.inner.to_pkcs8_pem(LineEnding::LF)?;
+        Ok(pem.to_string())
+    }
+
+    pub fn to_spki_pem(&self) -> Result<String> {
+        let pem = self
+            .inner
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)?;
+        Ok(pem)
+    }
+
+    pub fn to_jwk(&self) -> Result<String> {
+        let public_key = self.inner.verifying_key();
+        // compute SPKI fingerprint as kid
+        let spki = self.inner.verifying_key().to_public_key_der()?;
+        let fp: [u8; 32] = Sha256::digest(spki.as_bytes()).into();
+        let kid = general_purpose::URL_SAFE_NO_PAD.encode(fp);
+        let jwk = serde_json::json!({
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": general_purpose::URL_SAFE_NO_PAD.encode(public_key.to_bytes()),
+            "kid": kid
+        });
+        Ok(jwk.to_string())
+    }
+}
+
+impl Ed25519 {
+    /// Get the public key for this keypair
+    pub fn public_key(&self) -> VerifyingKey {
+        self.inner.verifying_key()
+    }
+
+    pub fn sign(&self, message: &[u8]) -> [u8; 64] {
+        let signature = self.inner.sign(message);
+        signature.to_bytes()
+    }
+
+    pub fn spki_sha256_fingerprint(&self) -> Result<[u8; 32]> {
+        let spki = self.to_spki_der()?;
+        Ok(Sha256::digest(&spki).into())
+    }
+}
+
 pub fn verify(public_key: &[u8; 32], message: &[u8], signature: &[u8; 64]) -> bool {
-    let verifying_key = match VerifyingKey::from_bytes(public_key) {
+    let verifying_key = match public_key_from_bytes(public_key) {
         Ok(key) => key,
         Err(_) => return false,
     };
-
     let signature = Signature::from_bytes(signature);
-
     verifying_key.verify(message, &signature).is_ok()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Strongly-typed verify that returns a Result for better error handling.
+pub fn verify_result(
+    public_key: &VerifyingKey,
+    message: &[u8],
+    signature: &Signature,
+) -> Result<()> {
+    public_key.verify(message, signature).map_err(Into::into)
+}
 
-    #[test]
-    fn test_generate_sign_verify() {
-        let (private_key, public_key) = generate_keypair();
-        let message = b"Hello, world!";
+pub fn public_key_from_spki_der(der: &[u8]) -> Result<VerifyingKey> {
+    VerifyingKey::from_public_key_der(der).map_err(Into::into)
+}
 
-        let signature = sign(&private_key, message);
-        assert!(verify(&public_key, message, &signature));
+pub fn public_key_from_spki_pem(pem: &str) -> Result<VerifyingKey> {
+    VerifyingKey::from_public_key_pem(pem).map_err(Into::into)
+}
 
-        // Wrong message should fail
-        assert!(!verify(&public_key, b"Wrong message", &signature));
-
-        // Wrong signature should fail
-        let mut bad_signature = signature;
-        bad_signature[0] ^= 0xFF;
-        assert!(!verify(&public_key, message, &bad_signature));
-    }
+pub fn public_key_from_bytes(bytes: &[u8; 32]) -> Result<VerifyingKey> {
+    VerifyingKey::from_bytes(bytes).map_err(Into::into)
 }

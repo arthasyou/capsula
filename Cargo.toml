@@ -20,17 +20,35 @@ path = "examples/full_demo.rs"
 name = "storage_demo"
 path = "examples/storage_demo.rs"
 
+[[example]]
+name = "key_demo"
+path = "examples/key_demo.rs"
+
+[[example]]
+name = "key_file_demo"
+path = "examples/key_file_demo.rs"
+
+[[example]]
+name = "key_pem_demo"
+path = "examples/key_pem_demo.rs"
+
+[[example]]
+name = "x25519_demo"
+path = "examples/x25519_demo.rs"
+
 [dependencies]
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
 capsula-key = { path = "crates/capsula-key" }
+capsula-crypto = { path = "crates/capsula-crypto" }
 
 # 通用依赖
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-time = { version = "0.3", features = [
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true, features = [
     "serde",
     "macros",
     "formatting",
@@ -57,10 +75,12 @@ repository = "https://github.com/ancient/capsula"
 
 [workspace.dependencies]
 # 内部 crates
+capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
 capsula-key = { path = "crates/capsula-key" }
+
 
 # 外部依赖
 serde = { version = "1.0", features = ["derive"] }
@@ -75,12 +95,14 @@ time = { version = "0.3", features = [
 hex = "0.4"
 
 # 加密相关
-ed25519-dalek = { version = "2.2", features = ["pkcs8", "pem", "rand_core"] }
-x25519-dalek = { version = "2.0.1", features = [] }
+ed25519-dalek = { version = "2.2" }
+x25519-dalek = { version = "2.0.1" }
 p256 = { version = "0.13", features = [] }
+pkcs8 = { version = "0.10", features = ["pem"] }
 getrandom = "0.3"
 sha2 = "0.10"
 signature = "2.2"
+base64 = "0.22.1"
 
 # 证书相关
 rcgen = { version = "0.14", features = ["pem"] }
@@ -90,6 +112,7 @@ pem = "3.0"
 
 # 密钥存储相关
 chacha20poly1305 = { version = "0.10", features = ["std"] }
+aes-gcm = { version = "0.10", features = ["std", "aes"] }
 
 # 开发依赖
 tempfile = "3.12"

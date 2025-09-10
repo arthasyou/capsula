@@ -7,14 +7,19 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# Ed25519 signatures
-ed25519-dalek = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true, features = [] }
 
-# X25519 key exchange
-x25519-dalek = { workspace = true, features = ["pkcs8"] }
-
-# P256 (NIST P-256/secp256r1) 
+ed25519-dalek = { workspace = true, features = [
+    "pkcs8",
+    "pem",
+    "rand_core",
+    "zeroize",
+] }
+x25519-dalek = { workspace = true, features = ["static_secrets", "zeroize"] }
 p256 = { workspace = true, features = ["ecdsa"] }
+pkcs8 = { workspace = true }
 
 # PEM encoding
 pem = { workspace = true }
@@ -27,6 +32,10 @@ getrandom = { workspace = true }
 
 # Encoding
 hex = { workspace = true }
+
+# Symmetric encryption
+chacha20poly1305 = { workspace = true }
+aes-gcm = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
