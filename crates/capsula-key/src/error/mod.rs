@@ -65,6 +65,9 @@ pub enum Error {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    #[error("Crypto error: {0}")]
+    CryptoError(#[from] capsula_crypto::error::Error),
+
     /// 系统时间错误
     #[error("System time error: {0}")]
     SystemTimeError(#[from] std::time::SystemTimeError),

@@ -76,7 +76,6 @@ impl DigitalSignature {
     }
 }
 
-
 /// 独立的签名验证函数（不需要密钥对实例）
 pub fn verify_signature_standalone(
     data: &[u8],
@@ -120,12 +119,12 @@ pub fn verify_signature_standalone(
         // SPKI DER 格式，需要提取公钥部分
         // Ed25519 SPKI 格式：前 12 字节是 OID 和元数据，后 32 字节是公钥
         if digital_signature.public_key.len() >= 44 {
-            &digital_signature.public_key[12..]
+            &digital_signature.public_key[12 ..]
         } else {
             return Err(Error::KeyError("Invalid public key format".to_string()));
         }
     };
-    
+
     let public_key = VerifyingKey::from_bytes(
         public_key_bytes
             .try_into()
@@ -139,16 +138,16 @@ pub fn verify_signature_standalone(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::impls::ed25519::Ed25519Provider;
-    use crate::provider::KeyProvider;
     use std::time::UNIX_EPOCH;
+
+    use super::*;
+    use crate::{impls::ed25519::Ed25519Provider, provider::KeyProvider};
 
     #[test]
     fn test_sign_and_verify_with_location() {
         let provider = Ed25519Provider::new().unwrap();
         let handle = provider.generate().unwrap();
-        
+
         let location = LocationInfo {
             latitude: Some(31.2304),
             longitude: Some(121.4737),
@@ -197,7 +196,8 @@ mod tests {
         };
 
         // 独立验证
-        let is_valid_standalone = verify_signature_standalone(medical_data, &digital_signature).unwrap();
+        let is_valid_standalone =
+            verify_signature_standalone(medical_data, &digital_signature).unwrap();
         assert!(is_valid_standalone);
 
         // 验证位置信息
@@ -220,7 +220,7 @@ mod tests {
         };
 
         let data = "测试医疗数据".as_bytes();
-        
+
         // 创建扩展签名信息
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
@@ -268,7 +268,7 @@ mod tests {
     fn test_invalid_signature() {
         let provider = Ed25519Provider::new().unwrap();
         let handle = provider.generate().unwrap();
-        
+
         let data = b"original data";
         let tampered_data = "篡改数据".as_bytes();
 
