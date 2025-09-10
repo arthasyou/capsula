@@ -81,7 +81,7 @@ impl X25519 {
         };
 
         let private_key_bytes = self.to_bytes();
-        let private_key = OctetString::new(&private_key_bytes)?;
+        let private_key = OctetString::new(private_key_bytes)?;
         let private_key_der = private_key.to_der()?;
 
         let pki = PrivateKeyInfo::new(algorithm, &private_key_der);
@@ -114,7 +114,7 @@ impl X25519 {
         };
 
         let private_key_bytes = self.to_bytes();
-        let private_key = OctetString::new(&private_key_bytes)?;
+        let private_key = OctetString::new(private_key_bytes)?;
         let private_key_der = private_key.to_der()?;
 
         let pki = PrivateKeyInfo::new(algorithm, &private_key_der);
