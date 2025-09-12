@@ -5,8 +5,9 @@ pub mod store;
 
 // Re-export core functionality
 pub use key::{
-    verify, Algorithm, Curve25519, P256Key, RsaKey, ExportablePrivateKey, Key, KeyAgree, KeyCapabilities, KeyEncDec,
-    KeyExportInfo, KeyFileIO, KeyMetadata, KeySign, KeyUsage, PublicKeyExportInfo, PublicKeyInfo, PublicKeySet,
+    Algorithm, Curve25519, ExportablePrivateKey, Key, KeyAgree, KeyCapabilities, KeyEncDec,
+    KeyExportInfo, KeyFileIO, KeyMetadata, KeySign, KeyUsage, P256Key, PublicKeyExportInfo,
+    PublicKeyInfo, PublicKeySet, RsaKey,
 };
 // Re-export signature types
 pub use signature::{

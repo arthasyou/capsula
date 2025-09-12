@@ -9,6 +9,7 @@ description = "PKI基础设施库，提供证书管理、CA、CRL等功能"
 
 [dependencies]
 capsula-key = { workspace = true }
+capsula-crypto = { workspace = true }
 rcgen = { workspace = true }
 x509-cert = { workspace = true }
 der = { workspace = true }

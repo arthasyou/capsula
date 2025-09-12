@@ -198,27 +198,13 @@ impl Csr {
         Self::parse_distinguished_name(&self.inner.info.subject)
     }
 
-    /// Extract Ed25519 public key bytes from SPKI
-    pub fn ed25519_public_key_bytes(&self) -> Result<[u8; 32]> {
-        let spki = &self.inner.info.public_key;
-
-        // Verify this is an Ed25519 key
-        if spki.algorithm.oid != const_oid::db::rfc8410::ID_ED_25519 {
-            return Err(PkiError::CsrError("Not an Ed25519 public key".to_string()));
-        }
-
-        // Get the public key bytes
-        let key_bytes = spki.subject_public_key.raw_bytes();
-        if key_bytes.len() != 32 {
-            return Err(PkiError::CsrError(format!(
-                "Invalid Ed25519 public key length: {}",
-                key_bytes.len()
-            )));
-        }
-
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(key_bytes);
-        Ok(key_array)
+    /// Extract public key in SPKI DER format (suitable for all algorithms)
+    pub fn public_key_der(&self) -> Result<Vec<u8>> {
+        self.inner
+            .info
+            .public_key
+            .to_der()
+            .map_err(|e| PkiError::CsrError(format!("Failed to encode public key: {}", e)))
     }
 
     /// Verify the CSR signature
@@ -230,25 +216,20 @@ impl Csr {
 
         // Get signature bytes
         let signature = self.inner.signature.raw_bytes();
-        if signature.len() != 64 {
-            return Err(PkiError::CsrError(
-                "Invalid signature length for Ed25519".to_string(),
-            ));
-        }
 
-        let mut sig_array = [0u8; 64];
-        sig_array.copy_from_slice(signature);
+        // Get public key in SPKI DER format
+        let spki_der = self.public_key_der()?;
 
-        // Extract the actual public key from the SPKI
-        let public_key_bytes = self.ed25519_public_key_bytes()?;
-
-        // Verify using the public key from the CSR
-        if capsula_key::verify(&public_key_bytes, &info_der, &sig_array) {
-            Ok(())
-        } else {
-            Err(PkiError::CsrError(
-                "Signature verification failed".to_string(),
-            ))
+        // Use unified signature verification
+        match capsula_crypto::verify_signature(&spki_der, &info_der, signature) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(PkiError::CsrError(
+                "CSR signature verification failed".to_string(),
+            )),
+            Err(e) => Err(PkiError::CsrError(format!(
+                "CSR signature verification error: {}",
+                e
+            ))),
         }
     }
 
@@ -555,32 +536,6 @@ mod tests {
 
         // Test signature verification
         csr.verify_signature().unwrap();
-    }
-
-    #[test]
-    fn test_ed25519_public_key_extraction() {
-        let key = Curve25519::generate().unwrap();
-
-        let subject = CsrSubject {
-            common_name: "pubkey.example.com".to_string(),
-            organization: None,
-            organizational_unit: None,
-            country: None,
-            state: None,
-            locality: None,
-        };
-
-        let csr = create_csr(&key, subject).unwrap();
-
-        // Test public key extraction
-        let pubkey_bytes = csr.ed25519_public_key_bytes().unwrap();
-        assert_eq!(pubkey_bytes.len(), 32);
-
-        // Should match the key used to create the CSR
-        let key_public_keys = key.public_keys();
-        let signing_key = key_public_keys.signing_key().unwrap();
-        let original_pubkey = signing_key.raw_public_key.as_ref().unwrap();
-        assert_eq!(pubkey_bytes, original_pubkey.as_slice());
     }
 
     #[test]

@@ -14,7 +14,7 @@ pub mod kdf;
 pub mod symmetric;
 
 // Re-export commonly used types for convenience
-pub use asymmetric::{ed25519::Ed25519, p256::P256, rsa::Rsa, x25519::X25519};
+pub use asymmetric::{ed25519::Ed25519, p256::P256, rsa::Rsa, x25519::X25519, verify_signature};
 pub use hash::{
     hash, hash_hex, verify, HashAlgorithm,
     sha256, sha256_hex, sha256_verify, 

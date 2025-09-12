@@ -115,13 +115,25 @@ pub trait ExportablePrivateKey {
 pub trait KeyFileIO {
     /// 导出所有密钥（私钥和公钥）到指定目录
     /// 返回导出信息包含所有文件路径
-    fn export_all_keys<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<KeyExportInfo>;
-    
+    fn export_all_keys<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<KeyExportInfo>;
+
     /// 导出公钥到PEM文件
-    fn export_public_keys_pem<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>>;
-    
+    fn export_public_keys_pem<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<Vec<PublicKeyExportInfo>>;
+
     /// 导出公钥到DER文件  
-    fn export_public_keys_der<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>>;
+    fn export_public_keys_der<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<Vec<PublicKeyExportInfo>>;
 }
 
 // ============================================================================
@@ -405,6 +417,3 @@ impl KeyExportInfo {
         KeyUsage::from_str(key_type_str).and_then(|key_type| self.find_public_key_path(key_type))
     }
 }
-
-/// Verify a signature using Ed25519 (for backward compatibility)
-pub use curve25519::verify;

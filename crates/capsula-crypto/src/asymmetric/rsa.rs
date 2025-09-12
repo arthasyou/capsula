@@ -139,10 +139,14 @@ impl Rsa {
     }
 }
 
-/// Verify RSA signature using PKCS#1 v1.5 with SHA-256
-pub fn verify(public_key: &RsaPublicKey, message: &[u8], signature: &[u8]) -> bool {
+/// Verify RSA signature with standard SPKI DER interface
+pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {
+    // Parse RSA public key from SPKI DER
+    let public_key = public_key_from_spki_der(spki_der)?;
+    
+    // Verify using PKCS#1 v1.5 with SHA-256
     let hashed = Sha256::digest(message);
-    public_key.verify(rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed, signature).is_ok()
+    Ok(public_key.verify(rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed, signature).is_ok())
 }
 
 /// Import public key from SPKI DER format
@@ -183,9 +187,9 @@ mod tests {
         let message = b"Hello, RSA!";
         
         let signature = key.sign(message).unwrap();
-        let public_key = key.public_key();
         
-        assert!(verify(&public_key, message, &signature));
+        let spki_der = key.to_spki_der().unwrap();
+        assert!(verify_with_spki_der(&spki_der, message, &signature).unwrap());
     }
 
     #[test]

@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 /// # Examples
 ///
 /// ```no_run
-/// use capsula_key::{P256Key, Key, KeySign, KeyAgree};
+/// use capsula_key::{Key, KeyAgree, KeySign, P256Key};
 ///
 /// // Generate a new P-256 key
 /// let key = P256Key::generate().unwrap();
@@ -91,8 +91,11 @@ impl Key for P256Key {
     }
 
     fn public_keys(&self) -> PublicKeySet {
-        let spki_der = self.inner.to_spki_der().expect("P-256 SPKI DER encoding failed");
-        
+        let spki_der = self
+            .inner
+            .to_spki_der()
+            .expect("P-256 SPKI DER encoding failed");
+
         // P-256 supports both signing and key agreement with the same key
         let mut public_keys = PublicKeySet::new();
         public_keys.add_key(KeyUsage::Signing, spki_der.clone());
@@ -101,7 +104,8 @@ impl Key for P256Key {
     }
 
     fn fingerprint_sha256_spki(&self) -> Vec<u8> {
-        self.inner.spki_sha256_fingerprint()
+        self.inner
+            .spki_sha256_fingerprint()
             .expect("P-256 SPKI fingerprint failed")
             .to_vec()
     }
@@ -109,7 +113,7 @@ impl Key for P256Key {
     fn key_id(&self) -> Vec<u8> {
         // Use SPKI SHA-256 fingerprint as key ID (first 16 bytes)
         let fingerprint = self.fingerprint_sha256_spki();
-        fingerprint[..16].to_vec()
+        fingerprint[.. 16].to_vec()
     }
 
     fn capabilities(&self) -> KeyCapabilities {
@@ -123,10 +127,10 @@ impl Key for P256Key {
 
 impl KeySign for P256Key {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>> {
-        self.inner.sign(message)
+        self.inner
+            .sign(message)
             .map_err(|e| Error::SignatureError(format!("P-256 signing failed: {}", e)))
     }
-
 
     fn signature_algorithm_id(&self) -> AlgorithmIdentifierOwned {
         // ECDSA with SHA-256 signature algorithm OID
@@ -144,13 +148,17 @@ impl KeySign for P256Key {
 impl KeyAgree for P256Key {
     fn compute_shared_secret(&self, peer_spki_der: &[u8]) -> Result<Vec<u8>> {
         // Import the other party's public key from DER format
-        let their_public_key = capsula_crypto::asymmetric::p256::public_key_from_spki_der(peer_spki_der)
-            .map_err(|e| Error::KeyError(format!("Failed to import P-256 public key: {}", e)))?;
-        
+        let their_public_key = capsula_crypto::asymmetric::p256::public_key_from_spki_der(
+            peer_spki_der,
+        )
+        .map_err(|e| Error::KeyError(format!("Failed to import P-256 public key: {}", e)))?;
+
         // Perform ECDH
-        let shared_secret = self.inner.compute_shared_secret(&their_public_key)
+        let shared_secret = self
+            .inner
+            .compute_shared_secret(&their_public_key)
             .map_err(|e| Error::KeyError(format!("P-256 ECDH failed: {}", e)))?;
-        
+
         Ok(shared_secret.to_vec())
     }
 
@@ -169,15 +177,16 @@ impl KeyAgree for P256Key {
 
 impl ExportablePrivateKey for P256Key {
     fn to_pkcs8_pem(&self) -> Result<String> {
-        self.inner.to_pkcs8_pem()
+        self.inner
+            .to_pkcs8_pem()
             .map_err(|e| Error::ExportError(format!("P-256 PKCS8 PEM export failed: {}", e)))
     }
 
     fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
-        self.inner.to_pkcs8_der()
+        self.inner
+            .to_pkcs8_der()
             .map_err(|e| Error::ExportError(format!("P-256 PKCS8 DER export failed: {}", e)))
     }
-
 }
 
 // ============================================================================
@@ -185,23 +194,26 @@ impl ExportablePrivateKey for P256Key {
 // ============================================================================
 
 impl KeyFileIO for P256Key {
-    fn export_all_keys<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<KeyExportInfo> {
+    fn export_all_keys<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<KeyExportInfo> {
         let base_path = base_dir.as_ref();
-        std::fs::create_dir_all(base_path)
-            .map_err(Error::IoError)?;
+        std::fs::create_dir_all(base_path).map_err(Error::IoError)?;
 
         // Export private key
         let private_pem = self.to_pkcs8_pem()?;
         let private_path = base_path.join(format!("{}.key", name_prefix));
-        std::fs::write(&private_path, private_pem)
-            .map_err(Error::IoError)?;
+        std::fs::write(&private_path, private_pem).map_err(Error::IoError)?;
 
         // Export public key (same key used for both signing and key agreement)
-        let public_pem = self.inner.to_spki_pem()
+        let public_pem = self
+            .inner
+            .to_spki_pem()
             .map_err(|e| Error::ExportError(format!("P-256 public PEM export failed: {}", e)))?;
         let public_path = base_path.join(format!("{}.pub", name_prefix));
-        std::fs::write(&public_path, &public_pem)
-            .map_err(Error::IoError)?;
+        std::fs::write(&public_path, &public_pem).map_err(Error::IoError)?;
 
         Ok(KeyExportInfo {
             algorithm: "P-256".to_string(),
@@ -214,16 +226,20 @@ impl KeyFileIO for P256Key {
         })
     }
 
-    fn export_public_keys_pem<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>> {
+    fn export_public_keys_pem<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<Vec<PublicKeyExportInfo>> {
         let base_path = base_dir.as_ref();
-        std::fs::create_dir_all(base_path)
-            .map_err(Error::IoError)?;
+        std::fs::create_dir_all(base_path).map_err(Error::IoError)?;
 
-        let public_pem = self.inner.to_spki_pem()
+        let public_pem = self
+            .inner
+            .to_spki_pem()
             .map_err(|e| Error::ExportError(format!("P-256 public PEM export failed: {}", e)))?;
         let public_path = base_path.join(format!("{}.pub", name_prefix));
-        std::fs::write(&public_path, &public_pem)
-            .map_err(Error::IoError)?;
+        std::fs::write(&public_path, &public_pem).map_err(Error::IoError)?;
 
         Ok(vec![PublicKeyExportInfo {
             key_type: KeyUsage::Signing,
@@ -231,16 +247,20 @@ impl KeyFileIO for P256Key {
         }])
     }
 
-    fn export_public_keys_der<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>> {
+    fn export_public_keys_der<P: AsRef<std::path::Path>>(
+        &self,
+        base_dir: P,
+        name_prefix: &str,
+    ) -> Result<Vec<PublicKeyExportInfo>> {
         let base_path = base_dir.as_ref();
-        std::fs::create_dir_all(base_path)
-            .map_err(Error::IoError)?;
+        std::fs::create_dir_all(base_path).map_err(Error::IoError)?;
 
-        let public_der = self.inner.to_spki_der()
+        let public_der = self
+            .inner
+            .to_spki_der()
             .map_err(|e| Error::ExportError(format!("P-256 public DER export failed: {}", e)))?;
         let public_path = base_path.join(format!("{}.der", name_prefix));
-        std::fs::write(&public_path, &public_der)
-            .map_err(Error::IoError)?;
+        std::fs::write(&public_path, &public_der).map_err(Error::IoError)?;
 
         Ok(vec![PublicKeyExportInfo {
             key_type: KeyUsage::Signing,
@@ -280,8 +300,8 @@ mod tests {
         let signature = key.sign(message).unwrap();
         assert!(signature.len() > 0);
 
-        let public_key = key.inner.public_key();
-        let is_valid = capsula_crypto::asymmetric::p256::verify(&public_key, message, &signature);
+        let spki_der = key.inner.to_spki_der().unwrap();
+        let is_valid = capsula_crypto::verify_signature(&spki_der, message, &signature).unwrap();
         assert!(is_valid);
     }
 
@@ -323,13 +343,13 @@ mod tests {
     #[test]
     fn test_p256_fingerprint_and_key_id() {
         let key = P256Key::generate().unwrap();
-        
+
         let fingerprint = key.fingerprint_sha256_spki();
         assert_eq!(fingerprint.len(), 32);
 
         let key_id = key.key_id();
         assert_eq!(key_id.len(), 16);
-        assert_eq!(key_id, &fingerprint[..16]);
+        assert_eq!(key_id, &fingerprint[.. 16]);
     }
 
     #[test]
@@ -339,14 +359,17 @@ mod tests {
         // Test PEM round-trip
         let pem = original_key.to_pkcs8_pem().unwrap();
         let imported_key = P256Key::from_pkcs8_pem(&pem).unwrap();
-        
-        assert_eq!(original_key.to_scalar_bytes(), imported_key.to_scalar_bytes());
+
+        assert_eq!(
+            original_key.to_scalar_bytes(),
+            imported_key.to_scalar_bytes()
+        );
         assert_eq!(original_key.key_id(), imported_key.key_id());
 
         // Test DER round-trip
         let der = original_key.to_pkcs8_der().unwrap();
         let imported_key_der = P256Key::from_pkcs8_der(&der).unwrap();
-        
+
         assert_eq!(original_key.key_id(), imported_key_der.key_id());
     }
 
@@ -361,16 +384,15 @@ mod tests {
         assert_eq!(key1.key_id(), key2.key_id());
     }
 
-
     #[test]
     fn test_p256_file_export() {
         use tempfile::TempDir;
 
         let key = P256Key::generate().unwrap();
         let temp_dir = TempDir::new().unwrap();
-        
+
         let export_info = key.export_all_keys(temp_dir.path(), "test_p256").unwrap();
-        
+
         // Check files exist
         assert!(std::path::Path::new(&export_info.private_key_path).exists());
         assert_eq!(export_info.public_key_paths.len(), 1);

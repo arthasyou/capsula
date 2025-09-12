@@ -15,6 +15,12 @@ pub enum Error {
     #[error("Ed25519 error: {0}")]
     Ed25519Error(#[from] ed25519_dalek::ed25519::Error),
 
+    #[error("RSA error: {0}")]
+    RsaError(#[from] rsa::Error),
+
+    #[error("P256 error: {0}")]
+    P256Error(#[from] p256::elliptic_curve::Error),
+
     #[error("DER error: {0}")]
     DerError(#[from] pkcs8::der::Error),
 

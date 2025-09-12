@@ -1,6 +1,9 @@
 use base64::{engine::general_purpose, Engine as _};
 use p256::{
-    ecdsa::{signature::Signer, signature::Verifier, Signature, SigningKey, VerifyingKey},
+    ecdsa::{
+        signature::{Signer, Verifier},
+        Signature, SigningKey, VerifyingKey,
+    },
     elliptic_curve::{
         rand_core::OsRng,
         sec1::{FromEncodedPoint, ToEncodedPoint},
@@ -78,7 +81,7 @@ impl P256 {
     pub fn to_jwk(&self) -> Result<String> {
         let public_key = self.inner.public_key();
         let encoded_point = public_key.to_encoded_point(false);
-        
+
         // compute SPKI fingerprint as kid
         let spki = self.to_spki_der()?;
         let fp: [u8; 32] = Sha256::digest(&spki).into();
@@ -87,7 +90,6 @@ impl P256 {
         // Extract x and y coordinates (uncompressed point format)
         let coords = encoded_point.coordinates();
         if let p256::elliptic_curve::sec1::Coordinates::Uncompressed { x, y } = coords {
-            
             let jwk = serde_json::json!({
                 "kty": "EC",
                 "crv": "P-256",
@@ -122,7 +124,10 @@ impl P256 {
 
     /// Perform ECDH key agreement
     pub fn compute_shared_secret(&self, their_public_key: &PublicKey) -> Result<[u8; 32]> {
-        let shared_secret = p256::ecdh::diffie_hellman(self.inner.to_nonzero_scalar(), their_public_key.as_affine());
+        let shared_secret = p256::ecdh::diffie_hellman(
+            self.inner.to_nonzero_scalar(),
+            their_public_key.as_affine(),
+        );
         let bytes = shared_secret.raw_secret_bytes();
         let mut result = [0u8; 32];
         result.copy_from_slice(bytes);
@@ -136,14 +141,19 @@ impl P256 {
     }
 }
 
-/// Verify P-256 ECDSA signature with SHA-256
-pub fn verify(public_key: &PublicKey, message: &[u8], signature: &[u8]) -> bool {
-    let verifying_key = VerifyingKey::from(public_key);
+/// Verify P-256 ECDSA signature with standard SPKI DER interface
+pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {
+    // Parse P256 public key from SPKI DER
+    let public_key = public_key_from_spki_der(spki_der)?;
+    let verifying_key = VerifyingKey::from(&public_key);
+
+    // Parse DER signature
     let signature = match Signature::from_der(signature) {
         Ok(sig) => sig,
-        Err(_) => return false,
+        Err(_) => return Ok(false),
     };
-    verifying_key.verify(message, &signature).is_ok()
+
+    Ok(verifying_key.verify(message, &signature).is_ok())
 }
 
 /// Import public key from SPKI DER format
@@ -160,7 +170,7 @@ pub fn public_key_from_spki_pem(pem: &str) -> Result<PublicKey> {
 pub fn public_key_from_encoded_point(bytes: &[u8]) -> Result<PublicKey> {
     let encoded_point = EncodedPoint::from_bytes(bytes)
         .map_err(|e| Error::Other(format!("Invalid encoded point: {}", e)))?;
-    
+
     let result = PublicKey::from_encoded_point(&encoded_point);
     if result.is_some().into() {
         Ok(result.unwrap())
@@ -182,7 +192,7 @@ mod tests {
     fn test_key_generation() {
         let key = P256::generate().unwrap();
         let public_key = key.public_key();
-        
+
         // P-256 public keys are 65 bytes uncompressed (0x04 + 32 + 32)
         let encoded = public_key.to_encoded_point(false);
         assert_eq!(encoded.len(), 65);
@@ -192,38 +202,38 @@ mod tests {
     fn test_sign_verify() {
         let key = P256::generate().unwrap();
         let message = b"Hello, P-256!";
-        
+
         let signature = key.sign(message).unwrap();
-        let public_key = key.public_key();
-        
-        assert!(verify(&public_key, message, &signature));
+
+        let spki_der = key.to_spki_der().unwrap();
+        assert!(verify_with_spki_der(&spki_der, message, &signature).unwrap());
     }
 
     #[test]
     fn test_ecdh() {
         let alice = P256::generate().unwrap();
         let bob = P256::generate().unwrap();
-        
+
         let alice_public = alice.public_key();
         let bob_public = bob.public_key();
-        
+
         let alice_shared = alice.compute_shared_secret(&bob_public).unwrap();
         let bob_shared = bob.compute_shared_secret(&alice_public).unwrap();
-        
+
         assert_eq!(alice_shared, bob_shared);
     }
 
     #[test]
     fn test_pem_export_import() {
         let key = P256::generate().unwrap();
-        
+
         // Test private key PEM
         let pem = key.to_pkcs8_pem().unwrap();
         assert!(pem.starts_with("-----BEGIN PRIVATE KEY-----"));
-        
+
         let imported = P256::from_pkcs8_pem(&pem).unwrap();
         assert_eq!(key.to_scalar_bytes(), imported.to_scalar_bytes());
-        
+
         // Test public key PEM
         let public_pem = key.to_spki_pem().unwrap();
         assert!(public_pem.starts_with("-----BEGIN PUBLIC KEY-----"));
@@ -232,23 +242,26 @@ mod tests {
     #[test]
     fn test_der_export_import() {
         let key = P256::generate().unwrap();
-        
+
         // Test private key DER
         let der = key.to_pkcs8_der().unwrap();
         let imported = P256::from_pkcs8_der(&der).unwrap();
         assert_eq!(key.to_scalar_bytes(), imported.to_scalar_bytes());
-        
+
         // Test public key DER
         let public_der = key.to_spki_der().unwrap();
         let public_key = public_key_from_spki_der(&public_der).unwrap();
-        assert_eq!(key.public_key().to_encoded_point(false), public_key.to_encoded_point(false));
+        assert_eq!(
+            key.public_key().to_encoded_point(false),
+            public_key.to_encoded_point(false)
+        );
     }
 
     #[test]
     fn test_jwk_export() {
         let key = P256::generate().unwrap();
         let jwk = key.to_jwk().unwrap();
-        
+
         // Parse JSON to verify structure
         let parsed: serde_json::Value = serde_json::from_str(&jwk).unwrap();
         assert_eq!(parsed["kty"], "EC");
@@ -263,7 +276,7 @@ mod tests {
         let key = P256::generate().unwrap();
         let fingerprint = key.spki_sha256_fingerprint().unwrap();
         assert_eq!(fingerprint.len(), 32);
-        
+
         // Fingerprint should be deterministic
         let fingerprint2 = key.spki_sha256_fingerprint().unwrap();
         assert_eq!(fingerprint, fingerprint2);
@@ -273,11 +286,14 @@ mod tests {
     fn test_encoded_point_roundtrip() {
         let key = P256::generate().unwrap();
         let public_key = key.public_key();
-        
+
         let encoded_bytes = public_key_to_encoded_point(&public_key);
         let recovered_key = public_key_from_encoded_point(&encoded_bytes).unwrap();
-        
-        assert_eq!(public_key.to_encoded_point(false), recovered_key.to_encoded_point(false));
+
+        assert_eq!(
+            public_key.to_encoded_point(false),
+            recovered_key.to_encoded_point(false)
+        );
     }
 
     #[test]
@@ -285,9 +301,12 @@ mod tests {
         let scalar_bytes = [42u8; 32];
         let key1 = P256::from_raw_scalar(&scalar_bytes).unwrap();
         let key2 = P256::from_raw_scalar(&scalar_bytes).unwrap();
-        
+
         // Same scalar should produce same keys
         assert_eq!(key1.to_scalar_bytes(), key2.to_scalar_bytes());
-        assert_eq!(key1.public_key().to_encoded_point(false), key2.public_key().to_encoded_point(false));
+        assert_eq!(
+            key1.public_key().to_encoded_point(false),
+            key2.public_key().to_encoded_point(false)
+        );
     }
 }

@@ -210,7 +210,36 @@ impl X509Certificate {
         Csr::parse_distinguished_name(&self.inner.tbs_certificate.issuer)
     }
 
-    /// Extract Ed25519 public key bytes from certificate
+    /// Extract public key bytes based on the algorithm
+    pub fn public_key_bytes(&self) -> Result<Vec<u8>> {
+        let spki = &self.inner.tbs_certificate.subject_public_key_info;
+        
+        // Return the public key bytes based on the algorithm
+        match spki.algorithm.oid {
+            const_oid::db::rfc8410::ID_ED_25519 => {
+                // Ed25519 public key is 32 bytes
+                let key_bytes = spki.subject_public_key.raw_bytes();
+                if key_bytes.len() != 32 {
+                    return Err(PkiError::CertError(format!(
+                        "Invalid Ed25519 public key length: expected 32, got {}",
+                        key_bytes.len()
+                    )));
+                }
+                Ok(key_bytes.to_vec())
+            }
+            const_oid::db::rfc5912::ECDSA_WITH_SHA_256 => {
+                // P256 public key in uncompressed format is 65 bytes (0x04 + 32 + 32)
+                let key_bytes = spki.subject_public_key.raw_bytes();
+                Ok(key_bytes.to_vec())
+            }
+            _ => Err(PkiError::CertError(format!(
+                "Unsupported public key algorithm: {}",
+                spki.algorithm.oid
+            ))),
+        }
+    }
+
+    /// Extract Ed25519 public key bytes (legacy function for compatibility)
     pub fn ed25519_public_key_bytes(&self) -> Result<[u8; 32]> {
         let spki = &self.inner.tbs_certificate.subject_public_key_info;
 
@@ -219,17 +248,16 @@ impl X509Certificate {
             return Err(PkiError::CertError("Not an Ed25519 public key".to_string()));
         }
 
-        // Get the public key bytes
-        let key_bytes = spki.subject_public_key.raw_bytes();
+        let key_bytes = self.public_key_bytes()?;
         if key_bytes.len() != 32 {
             return Err(PkiError::CertError(format!(
-                "Invalid Ed25519 public key length: {}",
+                "Invalid Ed25519 public key length: expected 32, got {}",
                 key_bytes.len()
             )));
         }
 
         let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(key_bytes);
+        key_array.copy_from_slice(&key_bytes);
         Ok(key_array)
     }
 
@@ -242,22 +270,28 @@ impl X509Certificate {
 
         // Get signature bytes
         let signature = self.inner.signature.raw_bytes();
-        if signature.len() != 64 {
-            return Err(PkiError::CertError(
-                "Invalid signature length for Ed25519".to_string(),
-            ));
-        }
 
-        let mut sig_array = [0u8; 64];
-        sig_array.copy_from_slice(signature);
+        // Convert issuer public key to SPKI DER format
+        // For now, assume it's Ed25519 and construct SPKI DER
+        let mut spki_der = Vec::new();
+        spki_der.extend_from_slice(&[
+            0x30, 0x2a,                    // SEQUENCE, length 42
+            0x30, 0x05,                    // SEQUENCE, length 5 (AlgorithmIdentifier)
+            0x06, 0x03, 0x2b, 0x65, 0x70,  // OID 1.3.101.112 (Ed25519)
+            0x03, 0x21, 0x00,              // BIT STRING, length 33, unused bits 0
+        ]);
+        spki_der.extend_from_slice(issuer_public_key);
 
-        // Verify using the issuer's public key
-        if capsula_key::verify(issuer_public_key, &tbs_der, &sig_array) {
-            Ok(())
-        } else {
-            Err(PkiError::CertError(
+        // Use unified signature verification
+        match capsula_crypto::verify_signature(&spki_der, &tbs_der, signature) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(PkiError::CertError(
                 "Certificate signature verification failed".to_string(),
-            ))
+            )),
+            Err(e) => Err(PkiError::CertError(format!(
+                "Certificate signature verification error: {}",
+                e
+            ))),
         }
     }
 
