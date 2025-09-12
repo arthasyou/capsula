@@ -4,7 +4,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use capsula_key::Key;
+use capsula_key::{Key, KeySign};
 use der::{Decode, Encode};
 use getrandom;
 use pkcs8::spki::AlgorithmIdentifierOwned;
@@ -81,9 +81,9 @@ impl Default for CertificateInfo {
 ///
 /// # Returns
 /// Returns a signed X.509 certificate
-pub fn create_certificate(
+pub fn create_certificate<K: Key + KeySign>(
     csr: &Csr,
-    issuer_key: &Key,
+    issuer_key: &K,
     ca_cert: &X509Certificate,
     cert_info: CertificateInfo,
 ) -> Result<X509Certificate> {
@@ -112,8 +112,8 @@ pub fn create_certificate(
 }
 
 /// Create a self-signed certificate from a key and subject
-pub fn create_self_signed_certificate(
-    key: &Key,
+pub fn create_self_signed_certificate<K: Key + KeySign>(
+    key: &K,
     subject: CertificateSubject,
     cert_info: CertificateInfo,
 ) -> Result<X509Certificate> {
@@ -125,9 +125,9 @@ pub fn create_self_signed_certificate(
 }
 
 /// Sign a CSR to create a certificate (alias for create_certificate)
-pub fn sign_certificate(
+pub fn sign_certificate<K: Key + KeySign>(
     csr: &Csr,
-    issuer_key: &Key,
+    issuer_key: &K,
     ca_cert: &X509Certificate,
     cert_info: CertificateInfo,
 ) -> Result<X509Certificate> {
@@ -135,9 +135,9 @@ pub fn sign_certificate(
 }
 
 /// Internal function to create self-signed certificate (special case)
-fn create_self_signed_certificate_internal(
+fn create_self_signed_certificate_internal<K: Key + KeySign>(
     csr: &Csr,
-    key: &Key,
+    key: &K,
     cert_info: CertificateInfo,
 ) -> Result<X509Certificate> {
     // Get subject and SPKI directly from CSR (no rebuilding)
@@ -332,11 +332,11 @@ impl X509Certificate {
 /// * `signing_key` - Key to sign the certificate
 /// * `cert_info` - Certificate configuration
 /// * `ca_ski` - CA's SKI for AKI extension (None for self-signed)
-fn create_certificate_internal(
+fn create_certificate_internal<K: Key + KeySign>(
     subject_name: x509_cert::name::Name,
     issuer_name: x509_cert::name::Name,
     public_key_info: pkcs8::spki::SubjectPublicKeyInfoOwned,
-    signing_key: &Key,
+    signing_key: &K,
     cert_info: CertificateInfo,
     ca_ski: Option<Vec<u8>>,
 ) -> Result<X509Certificate> {
@@ -481,7 +481,18 @@ fn create_certificate_internal(
         .map_err(|e| PkiError::CertError(format!("Failed to encode TbsCertificate: {}", e)))?;
 
     // Sign the certificate
-    let signature_bytes = signing_key.sign(&tbs_der);
+    let signature = signing_key.sign(&tbs_der)
+        .map_err(|_| PkiError::CertError("Failed to sign certificate".to_string()))?;
+    
+    // Convert to array (Ed25519 signatures are 64 bytes)
+    if signature.len() != 64 {
+        return Err(PkiError::CertError(format!(
+            "Expected 64-byte signature, got {} bytes", 
+            signature.len()
+        )));
+    }
+    let mut signature_bytes = [0u8; 64];
+    signature_bytes.copy_from_slice(&signature);
 
     // Create signature algorithm identifier
     let signature_algorithm = AlgorithmIdentifierOwned {
@@ -551,14 +562,14 @@ pub fn verify_certificate(cert: &X509Certificate, issuer_public_key: &[u8; 32]) 
 
 #[cfg(test)]
 mod tests {
-    use capsula_key::Key;
+    use capsula_key::Curve25519;
     use tempfile::tempdir;
 
     use super::*;
 
     #[test]
     fn test_create_self_signed_certificate() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CertificateSubject {
             common_name: "test.example.com".to_string(),
@@ -594,8 +605,8 @@ mod tests {
 
     #[test]
     fn test_certificate_from_csr() {
-        let key = Key::generate().unwrap();
-        let ca_key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
+        let ca_key = Curve25519::generate().unwrap();
 
         let subject = CertificateSubject {
             common_name: "server.example.com".to_string(),
@@ -648,7 +659,11 @@ mod tests {
         assert_eq!(cert_issuer.common_name, ca_subject.common_name);
 
         // Verify signature with CA public key
-        let ca_public_key = ca_key.ed25519_public_key_bytes();
+        let ca_public_keys = ca_key.public_keys();
+        let signing_key = ca_public_keys.signing_key().unwrap();
+        let ca_public_key_vec = signing_key.raw_public_key.as_ref().unwrap();
+        let mut ca_public_key = [0u8; 32];
+        ca_public_key.copy_from_slice(ca_public_key_vec);
         cert.verify_signature(&ca_public_key).unwrap();
 
         // Check serial number
@@ -657,7 +672,7 @@ mod tests {
 
     #[test]
     fn test_certificate_pem_roundtrip() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CertificateSubject {
             common_name: "roundtrip.example.com".to_string(),
@@ -689,7 +704,7 @@ mod tests {
         let pem_path = dir.path().join("test.pem");
         let der_path = dir.path().join("test.der");
 
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
         let subject = CertificateSubject {
             common_name: "file-test.example.com".to_string(),
             organization: None,
@@ -725,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_certificate_validity() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CertificateSubject {
             common_name: "validity.example.com".to_string(),

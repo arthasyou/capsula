@@ -7,24 +7,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/ancient/capsula"
 description = "数据胶囊 - 安全的数据封装和管理系统"
 
-
-[[example]]
-name = "key_demo"
-path = "examples/key_demo.rs"
-
-[[example]]
-name = "csr_demo"
-path = "examples/csr_demo.rs"
-
-[[example]]
-name = "csr_two_step_demo"
-path = "examples/csr_two_step_demo.rs"
-
-[[example]]
-name = "csr_alias_demo"
-path = "examples/csr_alias_demo.rs"
-
-
 [dependencies]
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
@@ -88,6 +70,8 @@ hex = "0.4"
 ed25519-dalek = { version = "2.2" }
 x25519-dalek = { version = "2.0.1" }
 p256 = { version = "0.13", features = [] }
+rsa = { version = "0.9", features = ["sha2"] }
+rand = "0.8"
 pkcs8 = { version = "0.10", features = ["pem"] }
 getrandom = "0.3"
 sha1 = "0.10"
@@ -101,7 +85,7 @@ rcgen = { version = "0.14", features = ["pem"] }
 x509-cert = { version = "0.2", features = ["pem"] }
 der = { version = "0.7", features = ["pem"] }
 pem = "3.0"
-const-oid = "0.9"
+const-oid = { version = "0.9", features = ["db"] }
 
 # 密钥存储相关
 chacha20poly1305 = { version = "0.10", features = ["std"] }

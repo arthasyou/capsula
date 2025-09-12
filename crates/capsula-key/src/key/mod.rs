@@ -1,334 +1,290 @@
-// Domain separation label for deriving the X25519 seed from the master seed
-const X25519_DERIVE_LABEL: &[u8] = b"capsula-x25519-derivation-v1\0\0\0";
+//! Key trait definition for cryptographic key abstraction
+//!
+//! This module defines the core Key trait that provides a unified interface
+//! for different cryptographic key implementations.
 
-use std::{fs, path::Path};
-
-pub use capsula_crypto::asymmetric::ed25519::verify;
-use capsula_crypto::{derive_key32, sha256, Ed25519, X25519};
-use ed25519_dalek::VerifyingKey;
+use pkcs8::spki::AlgorithmIdentifierOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
+// Import key implementations
+pub mod curve25519;
+pub mod p256;
+pub mod rsa;
+
+pub use curve25519::Curve25519;
+pub use p256::P256Key;
+pub use rsa::RsaKey;
+
+/// Core trait for cryptographic keys
+///
+/// This trait provides a unified interface for different cryptographic key implementations,
+/// enabling algorithm-agnostic code in the PKI layer. It focuses on key behaviors rather than
+/// construction - use the concrete type's methods (e.g., `Curve25519::generate()`) for key
+/// creation.
+
 // ============================================================================
-// Core Key Structure
+// Core Trait: Basic Key Identity
 // ============================================================================
 
-/// A unified cryptographic key that combines Ed25519 and X25519 keys
-///
-/// This structure provides both signing (Ed25519) and key exchange (X25519)
-/// capabilities derived from a common seed, ensuring cryptographic separation
-/// while maintaining a single key identity.
-///
-/// # Examples
-///
-/// ```no_run
-/// use capsula_key::key::{verify, Key};
-///
-/// // Generate a new random key
-/// let key = Key::generate().unwrap();
-///
-/// // Sign a message
-/// let message = b"Hello, World!";
-/// let signature = key.sign(message);
-/// assert!(verify(&key.ed25519_public_key_bytes(), message, &signature));
-///
-/// // Perform key exchange
-/// let other_key = Key::generate().unwrap();
-/// let shared_secret = key.compute_shared_secret(&other_key.x25519_public_key());
-/// ```
-pub struct Key {
-    /// Ed25519 signing key
-    ed25519: Ed25519,
-    /// X25519 key exchange key
-    x25519: X25519,
-}
+/// 核心密钥trait：任何密钥都至少能提供身份信息和公钥集合
+pub trait Key: Send + Sync {
+    /// 算法类型（使用枚举更稳定）
+    fn algorithm(&self) -> Algorithm;
 
-impl Key {
-    // ========================================================================
-    // Key Generation and Creation
-    // ========================================================================
+    /// 返回该密钥暴露的所有公钥及其用途
+    fn public_keys(&self) -> PublicKeySet;
 
-    /// Generate a new key pair with cryptographically secure randomness
-    pub fn generate() -> Result<Self> {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed).map_err(|e| Error::Other(e.to_string()))?;
-        Ok(Self::from_seed(&seed))
-    }
+    /// SPKI指纹（SHA-256）- 标准化指纹算法
+    fn fingerprint_sha256_spki(&self) -> Vec<u8>;
 
-    /// Create a key pair from a 32-byte seed
-    ///
-    /// Both Ed25519 and X25519 keys are deterministically derived from the seed
-    /// using domain separation to ensure cryptographic independence.
-    ///
-    /// # Arguments
-    /// * `seed` - 32-byte seed material
-    pub fn from_seed(seed: &[u8; 32]) -> Self {
-        // Create Ed25519 key directly from seed
-        let ed25519 = Ed25519::from_raw_seed(seed);
+    /// 密钥唯一标识符
+    fn key_id(&self) -> Vec<u8>;
 
-        // Derive X25519 seed using domain-separated hash
-        let x25519_seed = Self::derive_x25519_seed(seed);
-        let x25519 = X25519::from_raw_seed(&x25519_seed);
+    /// 声明支持的密码学能力
+    fn capabilities(&self) -> KeyCapabilities;
 
-        Self { ed25519, x25519 }
-    }
-
-    /// Derive X25519 seed from master seed using domain separation
-    fn derive_x25519_seed(seed: &[u8; 32]) -> [u8; 32] {
-        let mut data = Vec::with_capacity(seed.len() + X25519_DERIVE_LABEL.len());
-        data.extend_from_slice(X25519_DERIVE_LABEL);
-        data.extend_from_slice(seed);
-        sha256(&data)
-    }
-
-    // ========================================================================
-    // Key Import/Export - PEM Format
-    // ========================================================================
-
-    /// Import key from PKCS#8 (PEM) encoded Ed25519 private key
-    pub fn from_pkcs8_pem(pem: &str) -> Result<Self> {
-        let ed25519 = Ed25519::from_pem(pem)
-            .map_err(|e| Error::ImportError(format!("Failed to import Ed25519 key: {}", e)))?;
-
-        // Derive X25519 from Ed25519 seed
-        let ed25519_seed = ed25519.to_seed_bytes();
-        let x25519_seed = Self::derive_x25519_seed(&ed25519_seed);
-        let x25519 = X25519::from_raw_seed(&x25519_seed);
-
-        Ok(Self { ed25519, x25519 })
-    }
-
-    /// Export the Ed25519 private key to PKCS#8 (PEM) format
-    pub fn to_pkcs8_pem(&self) -> Result<String> {
-        self.ed25519
-            .to_pkcs8_pem()
-            .map_err(|e| Error::ExportError(format!("Failed to export Ed25519 key: {}", e)))
-    }
-
-    /// Export Ed25519 public key to SPKI (PEM) format
-    pub fn ed25519_spki_pem(&self) -> Result<String> {
-        self.ed25519
-            .to_spki_pem()
-            .map_err(|e| Error::ExportError(format!("Failed to export Ed25519 public key: {}", e)))
-    }
-
-    /// Export X25519 public key to SPKI (PEM) format
-    pub fn x25519_spki_pem(&self) -> Result<String> {
-        self.x25519
-            .to_spki_pem()
-            .map_err(|e| Error::ExportError(format!("Failed to export X25519 public key: {}", e)))
-    }
-
-    // ========================================================================
-    // Key Import/Export - DER Format
-    // ========================================================================
-
-    /// Import key from PKCS#8 (DER) encoded Ed25519 private key
-    pub fn from_pkcs8_der(der: &[u8]) -> Result<Self> {
-        let ed25519 = Ed25519::from_pkcs8_der(der).map_err(|e| {
-            Error::ImportError(format!("Failed to import Ed25519 key from DER: {}", e))
-        })?;
-
-        let ed25519_seed = ed25519.to_seed_bytes();
-        let x25519_seed = Self::derive_x25519_seed(&ed25519_seed);
-        let x25519 = X25519::from_raw_seed(&x25519_seed);
-
-        Ok(Self { ed25519, x25519 })
-    }
-
-    /// Export the Ed25519 private key to PKCS#8 (DER) format
-    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
-        self.ed25519
-            .to_pkcs8_der()
-            .map_err(|e| Error::ExportError(format!("Failed to export Ed25519 key to DER: {}", e)))
-    }
-
-    /// Export Ed25519 public key to SPKI (DER)
-    pub fn ed25519_spki_der(&self) -> Result<Vec<u8>> {
-        self.ed25519.to_spki_der().map_err(|e| {
-            Error::ExportError(format!("Failed to export Ed25519 public key (DER): {}", e))
-        })
-    }
-
-    /// Export X25519 public key to SPKI (DER)
-    pub fn x25519_spki_der(&self) -> Result<Vec<u8>> {
-        self.x25519.to_spki_der().map_err(|e| {
-            Error::ExportError(format!("Failed to export X25519 public key (DER): {}", e))
-        })
-    }
-
-    /// SHA-256 fingerprint of the Ed25519 SPKI (DER)
-    pub fn ed25519_spki_fingerprint_sha256(&self) -> Result<[u8; 32]> {
-        let spki = self.ed25519_spki_der()?;
-        Ok(sha256(&spki))
-    }
-
-    /// SHA-256 fingerprint of the X25519 SPKI (DER)
-    pub fn x25519_spki_fingerprint_sha256(&self) -> Result<[u8; 32]> {
-        let spki = self.x25519_spki_der()?;
-        Ok(sha256(&spki))
-    }
-
-    // ========================================================================
-    // Public Key Access
-    // ========================================================================
-
-    /// Get the Ed25519 public key
-    pub fn ed25519_public_key(&self) -> VerifyingKey {
-        self.ed25519.public_key()
-    }
-
-    /// Get the Ed25519 public key as bytes
-    pub fn ed25519_public_key_bytes(&self) -> [u8; 32] {
-        self.ed25519_public_key().to_bytes()
-    }
-
-    /// Get the X25519 public key as bytes
-    pub fn x25519_public_key(&self) -> [u8; 32] {
-        self.x25519.public_key().to_bytes()
-    }
-
-    // ========================================================================
-    // Cryptographic Operations
-    // ========================================================================
-
-    /// Sign a message using Ed25519
-    pub fn sign(&self, message: &[u8]) -> [u8; 64] {
-        self.ed25519.sign(message)
-    }
-
-    /// Compute X25519 shared secret with another party's public key
-    pub fn compute_shared_secret(&self, their_public_key: &[u8; 32]) -> [u8; 32] {
-        self.x25519.compute_shared_secret(their_public_key)
-    }
-
-    /// Derive a 32-byte session key from the X25519 shared secret using HKDF-SHA256
-    pub fn derive_session_key_hkdf(
-        &self,
-        their_public_key: &[u8; 32],
-        salt: &[u8],
-        info: &[u8],
-    ) -> [u8; 32] {
-        let shared_secret = self.compute_shared_secret(their_public_key);
-        derive_key32(&shared_secret, salt, info)
-    }
-
-    // ========================================================================
-    // Key Identification
-    // ========================================================================
-
-    /// Concatenate Ed25519 and X25519 public keys (64 bytes total)
-    fn concat_public_keys(&self) -> [u8; 64] {
-        let mut buf = [0u8; 64];
-        buf[.. 32].copy_from_slice(&self.ed25519_public_key_bytes());
-        buf[32 ..].copy_from_slice(&self.x25519_public_key());
-        buf
-    }
-
-    /// Get a unique identifier for this key
-    ///
-    /// The key ID is the first 8 bytes of the fingerprint (SHA-256 of public keys)
-    pub fn key_id(&self) -> [u8; 8] {
-        let fp = self.fingerprint();
-        let mut id = [0u8; 8];
-        id.copy_from_slice(&fp[.. 8]);
-        id
-    }
-
-    /// Get a hex-encoded key ID
-    pub fn key_id_hex(&self) -> String {
+    /// 获取hex编码的密钥ID
+    fn key_id_hex(&self) -> String {
         hex::encode(self.key_id())
     }
 
-    /// SHA-256 fingerprint of the concatenated public keys (Ed25519 || X25519)
-    pub fn fingerprint(&self) -> [u8; 32] {
-        sha256(&self.concat_public_keys())
-    }
-
-    /// Hex-encoded SHA-256 fingerprint
-    pub fn fingerprint_hex(&self) -> String {
-        hex::encode(self.fingerprint())
-    }
-
-    // ========================================================================
-    // File I/O Operations
-    // ========================================================================
-
-    /// Save the private key (PKCS#8 PEM) to a file
-    pub fn save_pkcs8_pem_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let pem = self.to_pkcs8_pem()?;
-        fs::write(path, pem).map_err(Error::IoError)
-    }
-
-    /// Load the private key (PKCS#8 PEM) from a file
-    pub fn load_pkcs8_pem_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let pem = fs::read_to_string(path).map_err(Error::IoError)?;
-        Self::from_pkcs8_pem(&pem)
-    }
-
-    /// Save the private key (PKCS#8 DER) to a file
-    pub fn save_pkcs8_der_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let der = self.to_pkcs8_der()?;
-        fs::write(path, der).map_err(Error::IoError)
-    }
-
-    /// Load the private key (PKCS#8 DER) from a file
-    pub fn load_pkcs8_der_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let der = fs::read(path).map_err(Error::IoError)?;
-        Self::from_pkcs8_der(&der)
-    }
-
-    /// Save SPKI (PEM) public keys to files
-    pub fn save_spki_public_keys<P: AsRef<Path>>(
-        &self,
-        ed25519_path: P,
-        x25519_path: P,
-    ) -> Result<()> {
-        let ed25519_pem = self.ed25519_spki_pem()?;
-        let x25519_pem = self.x25519_spki_pem()?;
-
-        fs::write(ed25519_path, ed25519_pem).map_err(Error::IoError)?;
-        fs::write(x25519_path, x25519_pem).map_err(Error::IoError)?;
-
-        Ok(())
-    }
-
-    /// Save public key info as JSON (for compatibility)
-    pub fn save_public_key_info<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let info = PublicKeyInfo::from(self);
-        let json = serde_json::to_string_pretty(&info).map_err(|e| {
-            Error::EncodingError(format!("Failed to serialize public key info: {}", e))
-        })?;
-        fs::write(path, json).map_err(Error::IoError)
-    }
-
-    /// Load public key info from JSON file
-    pub fn load_public_key_info<P: AsRef<Path>>(path: P) -> Result<PublicKeyInfo> {
-        let json = fs::read_to_string(path).map_err(Error::IoError)?;
-        serde_json::from_str(&json).map_err(|e| {
-            Error::EncodingError(format!("Failed to deserialize public key info: {}", e))
-        })
+    /// 获取hex编码的指纹
+    fn fingerprint_hex(&self) -> String {
+        hex::encode(self.fingerprint_sha256_spki())
     }
 }
 
 // ============================================================================
-// Public Key Information
+// Capability Traits: Optional Implementations
 // ============================================================================
 
-/// Public key information that can be shared
+/// 数字签名能力（可选实现）
+pub trait KeySign {
+    /// 对消息进行数字签名
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>>;
+
+    /// 获取签名算法标识符
+    fn signature_algorithm_id(&self) -> AlgorithmIdentifierOwned;
+}
+
+/// 密钥协商能力（可选实现）
+pub trait KeyAgree {
+    /// 与对方公钥计算共享秘密（输入SPKI DER格式以减少歧义）
+    fn compute_shared_secret(&self, peer_spki_der: &[u8]) -> Result<Vec<u8>>;
+
+    /// 获取密钥交换算法标识符
+    fn kex_algorithm_id(&self) -> AlgorithmIdentifierOwned;
+}
+
+/// 加密解密能力（可选实现，主要用于RSA）
+pub trait KeyEncDec {
+    /// 加密数据
+    fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>>;
+
+    /// 解密数据  
+    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>>;
+
+    /// 获取加密算法标识符
+    fn encryption_algorithm_id(&self) -> AlgorithmIdentifierOwned;
+}
+
+/// 私钥导出能力（可选实现，HSM可能不支持）
+pub trait ExportablePrivateKey {
+    /// 导出为PKCS#8 DER格式（使用安全内存）
+    fn to_pkcs8_der(&self) -> Result<Vec<u8>>;
+
+    /// 导出为PKCS#8 PEM格式
+    fn to_pkcs8_pem(&self) -> Result<String>;
+
+    /// 保存私钥到PEM文件
+    fn save_pkcs8_pem_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let pem = self.to_pkcs8_pem()?;
+        std::fs::write(path, pem).map_err(Error::from)
+    }
+
+    /// 保存私钥到DER文件
+    fn save_pkcs8_der_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let der = self.to_pkcs8_der()?;
+        std::fs::write(path, der).map_err(Error::from)
+    }
+}
+
+/// 密钥文件I/O能力（导出所有密钥到文件）
+pub trait KeyFileIO {
+    /// 导出所有密钥（私钥和公钥）到指定目录
+    /// 返回导出信息包含所有文件路径
+    fn export_all_keys<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<KeyExportInfo>;
+    
+    /// 导出公钥到PEM文件
+    fn export_public_keys_pem<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>>;
+    
+    /// 导出公钥到DER文件  
+    fn export_public_keys_der<P: AsRef<std::path::Path>>(&self, base_dir: P, name_prefix: &str) -> Result<Vec<PublicKeyExportInfo>>;
+}
+
+// ============================================================================
+// Supporting Data Structures
+// ============================================================================
+
+/// 算法枚举（比字符串更稳定）
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Algorithm {
+    Ed25519,
+    X25519,
+    P256,
+    Rsa,
+}
+
+impl Algorithm {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Algorithm::Ed25519 => "Ed25519",
+            Algorithm::X25519 => "X25519",
+            Algorithm::P256 => "P256",
+            Algorithm::Rsa => "RSA",
+        }
+    }
+}
+
+/// 密钥能力标志位
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyCapabilities {
+    bits: u32,
+}
+
+impl KeyCapabilities {
+    pub const SIGNING: Self = Self { bits: 0b0001 };
+    pub const KEY_AGREEMENT: Self = Self { bits: 0b0010 };
+    pub const ENCRYPTION: Self = Self { bits: 0b0100 };
+
+    pub const fn empty() -> Self {
+        Self { bits: 0 }
+    }
+
+    pub const fn new(bits: u32) -> Self {
+        Self { bits }
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        (self.bits & other.bits) == other.bits
+    }
+
+    pub const fn union(self, other: Self) -> Self {
+        Self {
+            bits: self.bits | other.bits,
+        }
+    }
+
+    pub fn supports_signing(self) -> bool {
+        self.contains(Self::SIGNING)
+    }
+
+    pub fn supports_key_agreement(self) -> bool {
+        self.contains(Self::KEY_AGREEMENT)
+    }
+
+    pub fn supports_encryption(self) -> bool {
+        self.contains(Self::ENCRYPTION)
+    }
+}
+
+/// 公钥集合
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PublicKeySet {
+    pub keys: Vec<PublicKeyEntry>,
+}
+
+impl PublicKeySet {
+    pub fn new() -> Self {
+        Self { keys: Vec::new() }
+    }
+
+    pub fn add_key(&mut self, usage: KeyUsage, spki_der: Vec<u8>) {
+        self.keys.push(PublicKeyEntry {
+            usage,
+            spki_der,
+            raw_public_key: None,
+        });
+    }
+
+    pub fn add_key_with_raw(&mut self, usage: KeyUsage, spki_der: Vec<u8>, raw: Vec<u8>) {
+        self.keys.push(PublicKeyEntry {
+            usage,
+            spki_der,
+            raw_public_key: Some(raw),
+        });
+    }
+
+    pub fn find_by_usage(&self, usage: KeyUsage) -> Option<&PublicKeyEntry> {
+        self.keys.iter().find(|k| k.usage == usage)
+    }
+
+    pub fn signing_key(&self) -> Option<&PublicKeyEntry> {
+        self.find_by_usage(KeyUsage::Signing)
+    }
+
+    pub fn key_agreement_key(&self) -> Option<&PublicKeyEntry> {
+        self.find_by_usage(KeyUsage::KeyAgreement)
+    }
+
+    pub fn encryption_key(&self) -> Option<&PublicKeyEntry> {
+        self.find_by_usage(KeyUsage::Encryption)
+    }
+}
+
+/// 公钥条目
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PublicKeyEntry {
+    pub usage: KeyUsage,
+    pub spki_der: Vec<u8>,
+    pub raw_public_key: Option<Vec<u8>>,
+}
+
+/// 密钥用途枚举
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyUsage {
+    Signing,
+    KeyAgreement,
+    Encryption,
+}
+
+impl KeyUsage {
+    /// 获取字符串表示
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            KeyUsage::Signing => "signing",
+            KeyUsage::KeyAgreement => "key_exchange",
+            KeyUsage::Encryption => "encryption",
+        }
+    }
+
+    /// 从字符串解析
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "signing" => Some(KeyUsage::Signing),
+            "key_exchange" => Some(KeyUsage::KeyAgreement),
+            "encryption" => Some(KeyUsage::Encryption),
+            _ => None,
+        }
+    }
+}
+
+/// 公钥信息（重新设计以匹配新的trait系统）
 ///
-/// This structure contains both public keys and the key ID,
-/// suitable for distribution and key exchange protocols.
+/// 这个结构应该直接使用PublicKeySet，语义更清晰
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PublicKeyInfo {
-    /// Ed25519 public key (32 bytes)
-    pub ed25519: [u8; 32],
-    /// X25519 public key (32 bytes)  
-    pub x25519: [u8; 32],
-    /// Hex-encoded key ID
+    /// 算法类型
+    pub algorithm: Algorithm,
+    /// 密钥ID（hex编码）
     pub key_id: String,
-    /// Optional metadata
+    /// 所有公钥及其用途
+    pub public_keys: PublicKeySet,
+    /// 支持的能力
+    pub capabilities: KeyCapabilities,
+    /// 可选的元数据
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<KeyMetadata>,
 }
@@ -346,178 +302,109 @@ pub struct KeyMetadata {
     pub expires_at: Option<u64>,
 }
 
-impl From<&Key> for PublicKeyInfo {
-    fn from(key: &Key) -> Self {
+impl<K: Key> From<&K> for PublicKeyInfo {
+    fn from(key: &K) -> Self {
         Self {
-            ed25519: key.ed25519_public_key_bytes(),
-            x25519: key.x25519_public_key(),
+            algorithm: key.algorithm(),
             key_id: key.key_id_hex(),
+            public_keys: key.public_keys(),
+            capabilities: key.capabilities(),
             metadata: None,
         }
     }
 }
 
 impl PublicKeyInfo {
-    /// Create with metadata
-    pub fn with_metadata(key: &Key, metadata: KeyMetadata) -> Self {
+    /// 使用元数据创建PublicKeyInfo
+    pub fn with_metadata<K: Key>(key: &K, metadata: KeyMetadata) -> Self {
         let mut info = Self::from(key);
         info.metadata = Some(metadata);
         info
     }
 
-    /// Verify a signature using the Ed25519 public key
-    pub fn verify(&self, message: &[u8], signature: &[u8; 64]) -> bool {
-        verify(&self.ed25519, message, signature)
+    /// 获取签名公钥（如果存在）
+    pub fn signing_key(&self) -> Option<&PublicKeyEntry> {
+        self.public_keys.signing_key()
+    }
+
+    /// 获取密钥交换公钥（如果存在）
+    pub fn key_agreement_key(&self) -> Option<&PublicKeyEntry> {
+        self.public_keys.key_agreement_key()
+    }
+
+    /// 获取加密公钥（如果存在）
+    pub fn encryption_key(&self) -> Option<&PublicKeyEntry> {
+        self.public_keys.encryption_key()
+    }
+
+    /// 检查是否支持指定能力
+    pub fn supports_capability(&self, capability: KeyCapabilities) -> bool {
+        self.capabilities.contains(capability)
+    }
+
+    /// 按用途查找公钥
+    pub fn find_key_by_usage(&self, usage: KeyUsage) -> Option<&PublicKeyEntry> {
+        self.public_keys.find_by_usage(usage)
     }
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
+/// 密钥导出信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyExportInfo {
+    /// 算法名称
+    pub algorithm: String,
+    /// 密钥ID
+    pub key_id: String,
+    /// 私钥文件路径
+    pub private_key_path: String,
+    /// 所有公钥文件信息
+    pub public_key_paths: Vec<PublicKeyExportInfo>,
+}
 
-#[cfg(test)]
-mod tests {
-    use tempfile::tempdir;
+/// 公钥导出信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicKeyExportInfo {
+    /// 公钥类型
+    pub key_type: KeyUsage,
+    /// 文件路径
+    pub file_path: String,
+}
 
-    use super::*;
-
-    #[test]
-    fn test_key_generation() {
-        let key = Key::generate().unwrap();
-        let pub_key = key.ed25519_public_key_bytes();
-
-        // Test signing
-        let message = b"test message";
-        let signature = key.sign(message);
-        assert!(verify(&pub_key, message, &signature));
-
-        // Test key exchange
-        let key2 = Key::generate().unwrap();
-        let shared1 = key.compute_shared_secret(&key2.x25519_public_key());
-        let shared2 = key2.compute_shared_secret(&key.x25519_public_key());
-        assert_eq!(shared1, shared2);
+impl KeyExportInfo {
+    /// 保存导出信息到JSON文件
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| Error::EncodingError(format!("Failed to serialize export info: {}", e)))?;
+        std::fs::write(path, json).map_err(Error::from)
     }
 
-    #[test]
-    fn test_key_from_seed() {
-        let seed = [42u8; 32];
-        let key1 = Key::from_seed(&seed);
-        let key2 = Key::from_seed(&seed);
-
-        // Same seed should produce same keys
-        assert_eq!(key1.ed25519.to_seed_bytes(), key2.ed25519.to_seed_bytes());
-        assert_eq!(key1.x25519.to_bytes(), key2.x25519.to_bytes());
-        assert_eq!(key1.key_id(), key2.key_id());
+    /// 从JSON文件加载导出信息
+    pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let json = std::fs::read_to_string(path).map_err(Error::from)?;
+        serde_json::from_str(&json)
+            .map_err(|e| Error::EncodingError(format!("Failed to deserialize export info: {}", e)))
     }
 
-    #[test]
-    fn test_pem_export_import() {
-        let key = Key::generate().unwrap();
-        let pem = key.to_pkcs8_pem().unwrap();
-        let imported = Key::from_pkcs8_pem(&pem).unwrap();
-
-        // Keys should match
-        assert_eq!(
-            key.ed25519.to_seed_bytes(),
-            imported.ed25519.to_seed_bytes()
-        );
-        assert_eq!(key.x25519.to_bytes(), imported.x25519.to_bytes());
-        assert_eq!(key.key_id(), imported.key_id());
+    /// 获取所有文件路径
+    pub fn all_file_paths(&self) -> Vec<String> {
+        let mut paths = vec![self.private_key_path.clone()];
+        paths.extend(self.public_key_paths.iter().map(|p| p.file_path.clone()));
+        paths
     }
 
-    #[test]
-    fn test_der_export_import() {
-        let key = Key::generate().unwrap();
-        let der = key.to_pkcs8_der().unwrap();
-        let imported = Key::from_pkcs8_der(&der).unwrap();
-
-        // Keys should match
-        assert_eq!(
-            key.ed25519.to_seed_bytes(),
-            imported.ed25519.to_seed_bytes()
-        );
-        assert_eq!(key.x25519.to_bytes(), imported.x25519.to_bytes());
+    /// 按类型查找公钥文件路径
+    pub fn find_public_key_path(&self, key_type: KeyUsage) -> Option<&str> {
+        self.public_key_paths
+            .iter()
+            .find(|p| p.key_type == key_type)
+            .map(|p| p.file_path.as_str())
     }
 
-    #[test]
-    fn test_key_derivation() {
-        let alice = Key::generate().unwrap();
-        let bob = Key::generate().unwrap();
-
-        let salt = b"test-salt";
-        let info = b"test-encryption-v1";
-
-        let alice_key = alice.derive_session_key_hkdf(&bob.x25519_public_key(), salt, info);
-        let bob_key = bob.derive_session_key_hkdf(&alice.x25519_public_key(), salt, info);
-
-        assert_eq!(alice_key, bob_key);
-    }
-
-    #[test]
-    fn test_fingerprint() {
-        let key = Key::generate().unwrap();
-
-        let fp = key.fingerprint();
-        assert_eq!(fp.len(), 32);
-
-        // Deterministic for the same key
-        assert_eq!(fp, key.fingerprint());
-
-        // Hex helper works and length is 64 hex chars
-        let hex_fp = key.fingerprint_hex();
-        assert_eq!(hex_fp.len(), 64);
-    }
-
-    #[test]
-    fn test_file_operations() {
-        let dir = tempdir().unwrap();
-        let key_path = dir.path().join("test.pem");
-        let der_path = dir.path().join("test.der");
-        let ed25519_pub = dir.path().join("ed25519.pub.pem");
-        let x25519_pub = dir.path().join("x25519.pub.pem");
-        let info_path = dir.path().join("public.json");
-
-        let key = Key::generate().unwrap();
-
-        // Test PEM file operations
-        key.save_pkcs8_pem_file(&key_path).unwrap();
-        let loaded = Key::load_pkcs8_pem_file(&key_path).unwrap();
-        assert_eq!(key.key_id(), loaded.key_id());
-
-        // Test DER file operations
-        key.save_pkcs8_der_file(&der_path).unwrap();
-        let loaded = Key::load_pkcs8_der_file(&der_path).unwrap();
-        assert_eq!(key.key_id(), loaded.key_id());
-
-        // Test public key export
-        key.save_spki_public_keys(&ed25519_pub, &x25519_pub)
-            .unwrap();
-        assert!(ed25519_pub.exists());
-        assert!(x25519_pub.exists());
-
-        // Test JSON export
-        key.save_public_key_info(&info_path).unwrap();
-        let info = Key::load_public_key_info(&info_path).unwrap();
-        assert_eq!(info.key_id, key.key_id_hex());
-    }
-
-    #[test]
-    fn test_public_key_info_with_metadata() {
-        let key = Key::generate().unwrap();
-
-        let metadata = KeyMetadata {
-            name: Some("Test Key".to_string()),
-            email: Some("test@example.com".to_string()),
-            created_at: Some(1234567890),
-            expires_at: None,
-        };
-
-        let info = PublicKeyInfo::with_metadata(&key, metadata.clone());
-        assert_eq!(info.metadata.as_ref().unwrap().name, metadata.name);
-
-        // Test signature verification through PublicKeyInfo
-        let message = b"test message";
-        let signature = key.sign(message);
-        assert!(info.verify(message, &signature));
+    /// 按字符串类型查找公钥文件路径（向后兼容）
+    pub fn find_public_key_path_by_str(&self, key_type_str: &str) -> Option<&str> {
+        KeyUsage::from_str(key_type_str).and_then(|key_type| self.find_public_key_path(key_type))
     }
 }
+
+/// Verify a signature using Ed25519 (for backward compatibility)
+pub use curve25519::verify;

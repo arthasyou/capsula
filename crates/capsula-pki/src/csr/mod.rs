@@ -5,7 +5,7 @@
 
 use std::str::FromStr;
 
-use capsula_key::Key;
+use capsula_key::{Key, KeySign};
 use der::{
     asn1::{ObjectIdentifier, SetOfVec, Utf8StringRef},
     Decode, Encode,
@@ -85,11 +85,13 @@ pub fn build_unsigned(
 /// Create a new CSR using the provided key and subject information (convenience function)
 ///
 /// This function combines build_unsigned, signing, and assemble into a single operation.
-pub fn create_csr(key: &Key, subject: CsrSubject) -> Result<Csr> {
-    // Get Ed25519 public key in SPKI format
-    let spki_der = key
-        .ed25519_spki_der()
-        .map_err(|e| PkiError::CsrError(format!("Failed to get SPKI: {}", e)))?;
+pub fn create_csr<K: Key + KeySign>(key: &K, subject: CsrSubject) -> Result<Csr> {
+    // Get public key in SPKI format
+    let public_keys = key.public_keys();
+    let signing_key = public_keys
+        .signing_key()
+        .ok_or_else(|| PkiError::CsrError("No signing key available".to_string()))?;
+    let spki_der = signing_key.spki_der.clone();
 
     // Build unsigned CSR info
     let cert_req_info = build_unsigned(subject, &spki_der)?;
@@ -99,8 +101,20 @@ pub fn create_csr(key: &Key, subject: CsrSubject) -> Result<Csr> {
         .to_der()
         .map_err(|e| PkiError::CsrError(format!("Failed to encode CertReqInfo: {}", e)))?;
 
-    // Sign the CSR info with Ed25519
-    let signature_bytes = key.sign(&info_der);
+    // Sign the CSR info
+    let signature = key
+        .sign(&info_der)
+        .map_err(|_| PkiError::CsrError("Failed to sign CSR".to_string()))?;
+
+    // Convert to fixed-size array (Ed25519 signatures are 64 bytes)
+    if signature.len() != 64 {
+        return Err(PkiError::CsrError(format!(
+            "Expected 64-byte signature, got {} bytes",
+            signature.len()
+        )));
+    }
+    let mut signature_bytes = [0u8; 64];
+    signature_bytes.copy_from_slice(&signature);
 
     // Assemble the complete CSR
     Csr::assemble(cert_req_info, &signature_bytes)
@@ -426,14 +440,14 @@ pub use x509_cert::request::CertReqInfo;
 
 #[cfg(test)]
 mod tests {
-    use capsula_key::Key;
+    use capsula_key::Curve25519;
     use tempfile::tempdir;
 
     use super::*;
 
     #[test]
     fn test_csr_creation() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CsrSubject {
             common_name: "test.example.com".to_string(),
@@ -457,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_csr_pem_roundtrip() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CsrSubject {
             common_name: "test.example.com".to_string(),
@@ -484,7 +498,7 @@ mod tests {
         let pem_path = dir.path().join("test.csr");
         let der_path = dir.path().join("test.der");
 
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
         let subject = CsrSubject {
             common_name: "file-test.example.com".to_string(),
             organization: None,
@@ -510,7 +524,7 @@ mod tests {
     #[test]
     fn test_csr_validation_errors() {
         // Test CSR with invalid subject (empty CN)
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
         let subject = CsrSubject {
             common_name: String::new(), // Invalid: empty CN
             organization: None,
@@ -526,7 +540,7 @@ mod tests {
 
     #[test]
     fn test_signature_verification() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CsrSubject {
             common_name: "verify.example.com".to_string(),
@@ -545,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_ed25519_public_key_extraction() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CsrSubject {
             common_name: "pubkey.example.com".to_string(),
@@ -563,13 +577,15 @@ mod tests {
         assert_eq!(pubkey_bytes.len(), 32);
 
         // Should match the key used to create the CSR
-        let original_pubkey = key.ed25519_public_key_bytes();
-        assert_eq!(pubkey_bytes, original_pubkey);
+        let key_public_keys = key.public_keys();
+        let signing_key = key_public_keys.signing_key().unwrap();
+        let original_pubkey = signing_key.raw_public_key.as_ref().unwrap();
+        assert_eq!(pubkey_bytes, original_pubkey.as_slice());
     }
 
     #[test]
     fn test_from_pem_with_different_tags() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
 
         let subject = CsrSubject {
             common_name: "tag-test.example.com".to_string(),
@@ -600,7 +616,7 @@ mod tests {
 
     #[test]
     fn test_build_unsigned_and_assemble() {
-        let key = Key::generate().unwrap();
+        let key = Curve25519::generate().unwrap();
         let subject = CsrSubject {
             common_name: "test-unsigned.example.com".to_string(),
             organization: Some("Test Org".to_string()),
@@ -611,7 +627,9 @@ mod tests {
         };
 
         // Get the public key in SPKI format
-        let spki_der = key.ed25519_spki_der().unwrap();
+        let key_public_keys = key.public_keys();
+        let signing_key = key_public_keys.signing_key().unwrap();
+        let spki_der = &signing_key.spki_der;
 
         // Test 1: Build unsigned CSR info
         let cert_req_info = build_unsigned(subject.clone(), &spki_der).unwrap();
@@ -622,9 +640,10 @@ mod tests {
         assert_eq!(parsed_subject.organization, Some("Test Org".to_string()));
         assert_eq!(parsed_subject.country, Some("US".to_string()));
 
-        // Test 2: Sign the CertReqInfo manually
+        // Test 2: Sign the CertReqInfo manually using trait
         let info_der = cert_req_info.to_der().unwrap();
-        let signature = key.sign(&info_der);
+        let signature_vec = <Curve25519 as KeySign>::sign(&key, &info_der).unwrap();
+        let signature: [u8; 64] = signature_vec.try_into().unwrap();
 
         // Test 3: Assemble the complete CSR
         let csr = Csr::assemble(cert_req_info, &signature).unwrap();
