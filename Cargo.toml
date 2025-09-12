@@ -36,6 +36,7 @@ members = [
     "crates/capsula-cli",
     "crates/capsula-key",
     "crates/capsula-wasm",
+    "crates/capsula-ffi",
 ]
 
 [workspace.package]
@@ -52,6 +53,7 @@ capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-api = { path = "crates/capsula-api" }
 capsula-key = { path = "crates/capsula-key" }
+capsula-ffi = { path = "crates/capsula-ffi" }
 
 
 # 外部依赖

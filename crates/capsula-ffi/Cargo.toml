@@ -1,0 +1,19 @@
+[package]
+name = "capsula-ffi"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "FFI bindings for capsula-key cryptographic operations"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+capsula-key = { workspace = true }
+libc = "0.2"
+serde_json = { workspace = true }
+
+[build-dependencies]
+cbindgen = "0.24"
