@@ -99,7 +99,7 @@ impl P256 {
             });
             Ok(jwk.to_string())
         } else {
-            return Err(Error::Other("Failed to extract coordinates".to_string()));
+            Err(Error::Other("Failed to extract coordinates".to_string()))
         }
     }
 

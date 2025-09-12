@@ -5,6 +5,7 @@
 
 use pkcs8::spki::AlgorithmIdentifierOwned;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 use crate::error::{Error, Result};
 
@@ -23,11 +24,9 @@ pub use rsa::RsaKey;
 /// enabling algorithm-agnostic code in the PKI layer. It focuses on key behaviors rather than
 /// construction - use the concrete type's methods (e.g., `Curve25519::generate()`) for key
 /// creation.
-
 // ============================================================================
 // Core Trait: Basic Key Identity
 // ============================================================================
-
 /// 核心密钥trait：任何密钥都至少能提供身份信息和公钥集合
 pub trait Key: Send + Sync {
     /// 算法类型（使用枚举更稳定）
@@ -208,6 +207,12 @@ pub struct PublicKeySet {
     pub keys: Vec<PublicKeyEntry>,
 }
 
+impl Default for PublicKeySet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PublicKeySet {
     pub fn new() -> Self {
         Self { keys: Vec::new() }
@@ -272,13 +277,21 @@ impl KeyUsage {
         }
     }
 
-    /// 从字符串解析
-    pub fn from_str(s: &str) -> Option<Self> {
+    /// 从字符串解析（推荐使用 FromStr trait）
+    pub fn parse(s: &str) -> Option<Self> {
+        s.parse().ok()
+    }
+}
+
+impl FromStr for KeyUsage {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "signing" => Some(KeyUsage::Signing),
-            "key_exchange" => Some(KeyUsage::KeyAgreement),
-            "encryption" => Some(KeyUsage::Encryption),
-            _ => None,
+            "signing" => Ok(KeyUsage::Signing),
+            "key_exchange" => Ok(KeyUsage::KeyAgreement),
+            "encryption" => Ok(KeyUsage::Encryption),
+            _ => Err(()),
         }
     }
 }
@@ -414,6 +427,6 @@ impl KeyExportInfo {
 
     /// 按字符串类型查找公钥文件路径（向后兼容）
     pub fn find_public_key_path_by_str(&self, key_type_str: &str) -> Option<&str> {
-        KeyUsage::from_str(key_type_str).and_then(|key_type| self.find_public_key_path(key_type))
+        key_type_str.parse().ok().and_then(|key_type| self.find_public_key_path(key_type))
     }
 }
