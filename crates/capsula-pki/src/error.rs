@@ -15,6 +15,10 @@ pub enum PkiError {
     #[error("CRL error: {0}")]
     CRLError(String),
 
+    /// CSR相关错误
+    #[error("CSR error: {0}")]
+    CsrError(String),
+
     /// 存储相关错误
     #[error("Store error: {0}")]
     StoreError(String),

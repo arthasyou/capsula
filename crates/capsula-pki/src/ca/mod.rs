@@ -1,5 +1,5 @@
 use crate::{
-    cert::{create_certificate, export_certificate, sign_certificate, CertificateSubject, X509Certificate},
+    cert::{create_certificate, create_self_signed_certificate, export_certificate, sign_certificate, CertificateInfo, CertificateSubject, X509Certificate},
     key::KeyPair as EccKeyPair,
 };
 use serde::{Deserialize, Serialize};
@@ -76,18 +76,19 @@ impl CertificateAuthority {
             organization: Some(config.organization.clone()),
             organizational_unit: config.organizational_unit.clone(),
             common_name: config.name.clone(),
-            email: config.email.clone(),
+        };
+
+        let cert_info = CertificateInfo {
+            subject: subject.clone(),
+            validity_seconds: (config.validity_days * 24 * 60 * 60) as u64,
+            serial_number: None,
+            is_ca: true,
+            key_usage: vec!["digitalSignature".to_string(), "keyCertSign".to_string()],
         };
 
         // 创建自签名CA证书
-        let certificate = create_certificate(
-            &keypair,
-            subject,
-            None, // 自签名
-            config.validity_days,
-            true, // 是CA证书
-        )
-        .map_err(|e| PkiError::CAError(format!("Failed to create CA certificate: {e}")))?;
+        let certificate = create_self_signed_certificate(&keypair, subject, cert_info)
+            .map_err(|e| PkiError::CAError(format!("Failed to create CA certificate: {}", e)))?;
 
         Ok(Self {
             keypair,

@@ -4,6 +4,12 @@ PKI (Public Key Infrastructure) 基础设施库，提供证书管理、CA、CRL 
 
 ## 功能特性
 
+- **证书签名请求 (CSR)**
+  - Ed25519 签名的 CSR 创建
+  - CSR 解析和验证
+  - PEM/DER 格式支持
+  - 扩展字段支持
+
 - **X.509 证书管理**
   - 证书创建和签名
   - 证书验证
@@ -31,6 +37,69 @@ PKI (Public Key Infrastructure) 基础设施库，提供证书管理、CA、CRL 
   - 元数据管理
 
 ## 使用示例
+
+### 创建证书签名请求 (CSR)
+
+```rust
+use capsula_key::Key;
+use capsula_pki::csr::{CertificateSigningRequest, CsrSubject, CsrBuilder, KeyUsageFlags};
+
+// 生成密钥对
+let key = Key::generate()?;
+
+// 创建主题信息
+let subject = CsrSubject {
+    common_name: "example.com".to_string(),
+    organization: Some("Example Corp".to_string()),
+    organizational_unit: Some("IT".to_string()),
+    country: Some("US".to_string()),
+    state: Some("California".to_string()),
+    locality: Some("San Francisco".to_string()),
+    email: Some("admin@example.com".to_string()),
+};
+
+// 创建基本 CSR
+let csr = CertificateSigningRequest::new(&key, subject.clone())?;
+
+// 创建带扩展的 CSR
+let advanced_csr = CsrBuilder::new(subject)
+    .add_extension(capsula_pki::csr::CsrExtension::KeyUsage(KeyUsageFlags {
+        digital_signature: true,
+        key_encipherment: true,
+        ..Default::default()
+    }))
+    .add_subject_alt_names(vec![
+        "dns:example.com".to_string(),
+        "dns:www.example.com".to_string(),
+    ])
+    .build(&key)?;
+
+// 验证 CSR
+let is_valid = csr.verify()?;
+println!("CSR signature valid: {}", is_valid);
+
+// 导出为不同格式
+let pem = csr.to_pem()?;
+let der = csr.to_der()?;
+
+// 保存到文件
+csr.save_pem_file("example.csr")?;
+csr.save_der_file("example.der")?;
+csr.save_info_file("example_info.json")?;
+
+// 从文件加载
+let loaded_csr = CertificateSigningRequest::load_pem_file("example.csr")?;
+
+// 全面验证
+let validation_result = csr.validate();
+if validation_result.is_valid() {
+    println!("CSR is valid");
+} else {
+    for error in validation_result.errors().unwrap() {
+        println!("Error: {}", error);
+    }
+}
+```
 
 ### 创建证书
 
