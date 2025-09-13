@@ -1,0 +1,47 @@
+//! RA (Registration Authority) 模块
+//!
+//! 提供注册机构功能，包括：
+//! - CSR接收与验证
+//! - 身份认证（个人/设备/服务）
+//! - 审批流程控制（手动/自动）
+
+pub mod csr;
+pub mod cert;
+pub mod request_handler;
+pub mod identity_auth;
+pub mod approval_workflow;
+pub mod validation;
+
+// 重新导出CSR和证书相关类型
+pub use csr::{create_csr, CertificateSigningRequest, Csr, CsrSubject, CertReqInfo, build_unsigned};
+pub use cert::{
+    create_certificate, create_self_signed_certificate, export_certificate, import_certificate,
+    parse_certificate, sign_certificate, verify_certificate, CertificateInfo, CertificateSubject,
+    X509Certificate,
+};
+
+use crate::error::Result;
+
+/// RA配置
+#[derive(Debug, Clone)]
+pub struct RAConfig {
+    /// RA名称
+    pub name: String,
+    /// 自动审批阈值
+    pub auto_approval_threshold: u8,
+    /// 启用身份验证
+    pub enable_identity_verification: bool,
+    /// 最大待处理请求数
+    pub max_pending_requests: usize,
+}
+
+impl Default for RAConfig {
+    fn default() -> Self {
+        Self {
+            name: "Default RA".to_string(),
+            auto_approval_threshold: 80,
+            enable_identity_verification: true,
+            max_pending_requests: 1000,
+        }
+    }
+}

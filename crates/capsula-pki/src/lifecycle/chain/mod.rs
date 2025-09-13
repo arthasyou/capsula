@@ -1,8 +1,8 @@
 use time::OffsetDateTime;
 
-use super::crl::CertificateRevocationList;
 use crate::error::{PkiError, Result as PkiResult};
-use crate::cert::X509Certificate;
+use crate::ra::cert::X509Certificate;
+use crate::status::crl::CertificateRevocationList;
 
 /// 证书链验证结果
 #[derive(Debug, Clone)]
@@ -311,11 +311,11 @@ pub fn build_certificate_chain(
 
 #[cfg(test)]
 mod tests {
-    use crate::key::KeyPair as EccKeyPair;
+    use capsula_key::Key as EccKeyPair;
 
     use super::*;
     use crate::ca::{CAConfig, CertificateAuthority};
-    use crate::cert::{create_certificate, CertificateSubject};
+    use crate::ra::cert::{create_certificate, CertificateSubject};
 
     #[test]
     fn test_chain_validation() {

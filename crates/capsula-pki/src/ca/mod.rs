@@ -1,7 +1,7 @@
-use crate::{
+use crate::ra::{
     cert::{create_certificate, create_self_signed_certificate, export_certificate, sign_certificate, CertificateInfo, CertificateSubject, X509Certificate},
-    key::KeyPair as EccKeyPair,
 };
+use capsula_key::{Key, Curve25519};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
@@ -52,7 +52,7 @@ impl Default for CAConfig {
 /// 证书颁发机构
 pub struct CertificateAuthority {
     /// CA 密钥对
-    keypair: EccKeyPair,
+    keypair: Curve25519,
     /// CA 证书
     certificate: X509Certificate,
     /// CA 配置
@@ -65,7 +65,7 @@ impl CertificateAuthority {
     /// 创建新的根CA
     pub fn new_root_ca(config: CAConfig) -> PkiResult<Self> {
         // 生成密钥对
-        let keypair = EccKeyPair::generate()
+        let keypair = Curve25519::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
 
         // 创建CA证书主体
@@ -100,7 +100,7 @@ impl CertificateAuthority {
 
     /// 从现有密钥和证书创建CA
     pub fn from_existing(
-        keypair: EccKeyPair,
+        keypair: Curve25519,
         certificate: X509Certificate,
         config: CAConfig,
     ) -> PkiResult<Self> {
@@ -128,7 +128,7 @@ impl CertificateAuthority {
     pub fn issue_certificate(
         &mut self,
         subject: CertificateSubject,
-        public_key: &EccKeyPair,
+        public_key: &Curve25519,
         validity_days: Option<u32>,
         is_ca: bool,
     ) -> PkiResult<X509Certificate> {
@@ -171,7 +171,7 @@ impl CertificateAuthority {
     /// 创建中间CA
     pub fn create_intermediate_ca(&mut self, config: CAConfig) -> PkiResult<CertificateAuthority> {
         // 生成中间CA的密钥对
-        let intermediate_keypair = EccKeyPair::generate()
+        let intermediate_keypair = Curve25519::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
 
         // 创建中间CA的证书主体
@@ -239,11 +239,11 @@ impl CertificateAuthority {
     pub fn import(export: CAExport) -> PkiResult<Self> {
         // 导入私钥
         let keypair =
-            EccKeyPair::import_private_key(&String::from_utf8_lossy(&export.private_key_pem))
+            Curve25519::import_private_key(&String::from_utf8_lossy(&export.private_key_pem))
                 .map_err(|e| PkiError::CAError(format!("Failed to import private key: {e}")))?;
 
         // 导入证书
-        let certificate = crate::cert::import_certificate(&export.certificate_pem)
+        let certificate = crate::ra::cert::import_certificate(&export.certificate_pem)
             .map_err(|e| PkiError::CAError(format!("Failed to import certificate: {e}")))?;
 
         let mut ca = Self::from_existing(keypair, certificate, export.config)?;
@@ -286,7 +286,7 @@ mod tests {
         let mut ca = CertificateAuthority::new_root_ca(config).unwrap();
 
         // 为终端实体创建密钥对
-        let end_entity_keypair = EccKeyPair::generate().unwrap();
+        let end_entity_keypair = Curve25519::generate().unwrap();
 
         // 创建证书主体
         let subject = CertificateSubject {

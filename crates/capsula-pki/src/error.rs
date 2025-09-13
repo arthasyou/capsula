@@ -35,6 +35,10 @@ pub enum PkiError {
     #[error("Certificate not found: {0}")]
     CertificateNotFound(String),
 
+    /// 通用资源未找到错误
+    #[error("Not found: {0}")]
+    NotFound(String),
+
     /// 证书已撤销
     #[error("Certificate revoked: {0}")]
     CertificateRevoked(String),

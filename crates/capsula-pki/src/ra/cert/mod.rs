@@ -18,7 +18,7 @@ use x509_cert::{
 };
 
 use crate::{
-    csr::{Csr, CsrSubject},
+    ra::csr::{Csr, CsrSubject},
     error::PkiError,
     Result,
 };
@@ -118,7 +118,7 @@ pub fn create_self_signed_certificate<K: Key + KeySign>(
     cert_info: CertificateInfo,
 ) -> Result<X509Certificate> {
     // Create a CSR first
-    let csr = crate::csr::create_csr(key, subject.clone())?;
+    let csr = crate::ra::csr::create_csr(key, subject.clone())?;
 
     // For self-signed certificates, we need special logic since there's no CA cert yet
     create_self_signed_certificate_internal(&csr, key, cert_info)
@@ -672,7 +672,7 @@ mod tests {
             create_self_signed_certificate(&ca_key, ca_subject.clone(), ca_cert_info).unwrap();
 
         // Create CSR
-        let csr = crate::csr::create_csr(&key, subject.clone()).unwrap();
+        let csr = crate::ra::csr::create_csr(&key, subject.clone()).unwrap();
 
         // Create certificate from CSR using CA cert
         let cert_info = CertificateInfo {

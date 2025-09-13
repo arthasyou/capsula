@@ -4,12 +4,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::cert::{export_certificate, import_certificate, X509Certificate};
+use crate::ra::cert::{export_certificate, import_certificate, X509Certificate};
 use time::OffsetDateTime;
+use capsula_key::Key;
 
 use crate::{
     error::{PkiError, Result as PkiResult},
     types::{CertificateMetadata, CertificateStatus},
+    keystore::KeyMetadata,
 };
 
 /// 存储后端接口
@@ -35,6 +37,27 @@ pub trait StorageBackend: Send + Sync {
 
     /// 加载元数据
     fn load_metadata(&self, serial_number: &str) -> PkiResult<CertificateMetadata>;
+
+    // 密钥存储方法
+    /// 存储密钥
+    fn store_key(
+        &mut self,
+        key_id: &str,
+        key: &dyn Key,
+        metadata: &KeyMetadata,
+    ) -> PkiResult<()>;
+
+    /// 检索密钥
+    fn retrieve_key(&self, key_id: &str) -> PkiResult<Option<Box<dyn Key>>>;
+
+    /// 检索密钥元数据
+    fn retrieve_key_metadata(&self, key_id: &str) -> PkiResult<Option<KeyMetadata>>;
+
+    /// 删除密钥
+    fn delete_key(&mut self, key_id: &str) -> PkiResult<bool>;
+
+    /// 列出所有密钥ID
+    fn list_keys(&self) -> PkiResult<Vec<String>>;
 }
 
 /// 文件系统存储后端
@@ -43,6 +66,8 @@ pub struct FileSystemBackend {
     root_path: PathBuf,
     certs_dir: PathBuf,
     metadata_dir: PathBuf,
+    keys_dir: PathBuf,
+    key_metadata_dir: PathBuf,
 }
 
 impl FileSystemBackend {
@@ -51,15 +76,21 @@ impl FileSystemBackend {
         let root_path = root_path.as_ref().to_path_buf();
         let certs_dir = root_path.join("certificates");
         let metadata_dir = root_path.join("metadata");
+        let keys_dir = root_path.join("keys");
+        let key_metadata_dir = root_path.join("key_metadata");
 
         // 创建目录
         fs::create_dir_all(&certs_dir)?;
         fs::create_dir_all(&metadata_dir)?;
+        fs::create_dir_all(&keys_dir)?;
+        fs::create_dir_all(&key_metadata_dir)?;
 
         Ok(Self {
             root_path,
             certs_dir,
             metadata_dir,
+            keys_dir,
+            key_metadata_dir,
         })
     }
 
@@ -69,6 +100,14 @@ impl FileSystemBackend {
 
     fn metadata_path(&self, serial_number: &str) -> PathBuf {
         self.metadata_dir.join(format!("{serial_number}.json"))
+    }
+
+    fn key_path(&self, key_id: &str) -> PathBuf {
+        self.keys_dir.join(format!("{key_id}.pem"))
+    }
+
+    fn key_metadata_path(&self, key_id: &str) -> PathBuf {
+        self.key_metadata_dir.join(format!("{key_id}.json"))
     }
 }
 
@@ -145,6 +184,76 @@ impl StorageBackend for FileSystemBackend {
 
         let json = fs::read_to_string(path)?;
         Ok(serde_json::from_str(&json)?)
+    }
+
+    // 密钥存储方法实现
+    fn store_key(
+        &mut self,
+        key_id: &str,
+        _key: &dyn Key,
+        metadata: &KeyMetadata,
+    ) -> PkiResult<()> {
+        // TODO: 实现密钥序列化和存储
+        // 暂时只存储元数据
+        let metadata_path = self.key_metadata_path(key_id);
+        let json = serde_json::to_string_pretty(metadata)
+            .map_err(|e| PkiError::SerializationError(e))?;
+        fs::write(metadata_path, json)?;
+        Ok(())
+    }
+
+    fn retrieve_key(&self, _key_id: &str) -> PkiResult<Option<Box<dyn Key>>> {
+        // TODO: 实现密钥反序列化和加载
+        // 暂时返回None
+        Ok(None)
+    }
+
+    fn retrieve_key_metadata(&self, key_id: &str) -> PkiResult<Option<KeyMetadata>> {
+        let path = self.key_metadata_path(key_id);
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let json = fs::read_to_string(path)?;
+        let metadata: KeyMetadata = serde_json::from_str(&json)
+            .map_err(|e| PkiError::SerializationError(e))?;
+        Ok(Some(metadata))
+    }
+
+    fn delete_key(&mut self, key_id: &str) -> PkiResult<bool> {
+        let key_path = self.key_path(key_id);
+        let metadata_path = self.key_metadata_path(key_id);
+        
+        let mut deleted = false;
+        
+        if key_path.exists() {
+            fs::remove_file(key_path)?;
+            deleted = true;
+        }
+        
+        if metadata_path.exists() {
+            fs::remove_file(metadata_path)?;
+            deleted = true;
+        }
+        
+        Ok(deleted)
+    }
+
+    fn list_keys(&self) -> PkiResult<Vec<String>> {
+        let mut key_ids = Vec::new();
+
+        for entry in fs::read_dir(&self.key_metadata_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                    key_ids.push(filename.to_string());
+                }
+            }
+        }
+
+        Ok(key_ids)
     }
 }
 
@@ -306,11 +415,11 @@ impl CertificateStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::KeyPair as EccKeyPair;
+    use capsula_key::Key as EccKeyPair;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::cert::{create_certificate, CertificateSubject};
+    use crate::ra::cert::{create_certificate, CertificateSubject};
 
     #[test]
     #[ignore = "Certificate parsing is not fully implemented yet"]

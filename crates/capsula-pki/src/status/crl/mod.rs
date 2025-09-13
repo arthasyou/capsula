@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{
-    cert::X509Certificate,
-    key::KeyPair as EccKeyPair,
-};
+use crate::ra::cert::X509Certificate;
+use capsula_key::{Key, Curve25519};
 use capsula_key::{DigitalSignature, LocationInfo};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -128,7 +126,7 @@ impl CertificateRevocationList {
     }
 
     /// 签名CRL
-    pub fn sign(&mut self, ca_keypair: &EccKeyPair) -> PkiResult<()> {
+    pub fn sign(&mut self, ca_keypair: &Curve25519) -> PkiResult<()> {
         // 序列化CRL数据（不包括签名）
         let mut crl_data = self.clone();
         crl_data.signature = None;
@@ -163,7 +161,8 @@ impl CertificateRevocationList {
         let data = serde_json::to_vec(&crl_data)?;
 
         // 从CA证书提取公钥
-        let _ca_public_key = EccKeyPair::public_key_from_bytes(&ca_cert.info.public_key)
+        // TODO: 修复证书公钥提取
+        // let _ca_public_key = ca_cert.public_key_bytes()
             .map_err(|e| PkiError::CRLError(format!("Failed to extract CA public key: {e}")))?;
 
         // 验证签名
@@ -198,7 +197,7 @@ impl CertificateRevocationList {
 /// CRL管理器
 pub struct CRLManager {
     crl: CertificateRevocationList,
-    ca_keypair: EccKeyPair,
+    ca_keypair: Curve25519,
     auto_sign: bool,
 }
 
@@ -206,7 +205,7 @@ impl CRLManager {
     /// 创建新的CRL管理器
     pub fn new(
         issuer: String,
-        ca_keypair: EccKeyPair,
+        ca_keypair: Curve25519,
         update_interval_days: i64,
         auto_sign: bool,
     ) -> Self {
@@ -286,10 +285,10 @@ impl CRLManager {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::KeyPair as EccKeyPair;
+    use capsula_key::Key as EccKeyPair;
 
     use super::*;
-    use crate::cert::{create_certificate, CertificateSubject};
+    use crate::ra::cert::{create_certificate, CertificateSubject};
 
     #[test]
     fn test_crl_basic_operations() {
