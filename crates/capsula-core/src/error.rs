@@ -9,9 +9,53 @@ pub enum CoreError {
     #[error("PKI error: {0}")]
     PkiError(#[from] capsula_pki::PkiError),
 
+    /// 密钥错误
+    #[error("Key error: {0}")]
+    KeyError(#[from] capsula_key::error::Error),
+
+    /// 加密错误
+    #[error("Crypto error: {0}")]
+    CryptoError(#[from] capsula_crypto::error::Error),
+
+    /// 封包错误
+    #[error("Encapsulation error: {0}")]
+    EncapsulationError(String),
+
+    /// 解包错误  
+    #[error("Decapsulation error: {0}")]
+    DecapsulationError(String),
+
+    /// 签名验证错误
+    #[error("Signature verification error: {0}")]
+    SignatureError(String),
+
     /// 访问控制错误
     #[error("Access control error: {0}")]
     AccessControlError(String),
+
+    /// 策略验证错误
+    #[error("Policy validation error: {0}")]
+    PolicyError(String),
+
+    /// 数据格式错误
+    #[error("Data format error: {0}")]
+    FormatError(String),
+
+    /// 完整性验证错误
+    #[error("Integrity check error: {0}")]
+    IntegrityError(String),
+
+    /// JSON序列化错误
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    /// Base64编解码错误
+    #[error("Base64 error: {0}")]
+    Base64Error(#[from] base64::DecodeError),
+
+    /// 时间解析错误
+    #[error("Time error: {0}")]
+    TimeError(#[from] time::error::Parse),
 
     /// 数据错误
     #[error("Data error: {0}")]

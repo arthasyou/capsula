@@ -59,7 +59,7 @@ pub struct Payload {
     pub external: Option<String>, // 大文件外链（如影像文件的存储位置）
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Policy {
     #[serde(default)]
     pub x509_req: Option<X509Req>, // 证书要求
