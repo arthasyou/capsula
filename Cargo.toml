@@ -32,6 +32,7 @@ resolver = "2"
 members = [
     "crates/capsula-crypto",
     "crates/capsula-pki",
+    "crates/capsula-pki-server",
     "crates/capsula-api",
     "crates/capsula-cli",
     "crates/capsula-key",
