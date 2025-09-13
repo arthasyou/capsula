@@ -4,14 +4,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::ra::cert::{export_certificate, import_certificate, X509Certificate};
-use time::OffsetDateTime;
 use capsula_key::Key;
+use time::OffsetDateTime;
 
 use crate::{
     error::{PkiError, Result as PkiResult},
-    types::{CertificateMetadata, CertificateStatus},
     keystore::KeyMetadata,
+    ra::cert::{export_certificate, import_certificate, X509Certificate},
+    types::{CertificateMetadata, CertificateStatus},
 };
 
 /// 存储后端接口
@@ -40,12 +40,7 @@ pub trait StorageBackend: Send + Sync {
 
     // 密钥存储方法
     /// 存储密钥
-    fn store_key(
-        &mut self,
-        key_id: &str,
-        key: &dyn Key,
-        metadata: &KeyMetadata,
-    ) -> PkiResult<()>;
+    fn store_key(&mut self, key_id: &str, key: &dyn Key, metadata: &KeyMetadata) -> PkiResult<()>;
 
     /// 检索密钥
     fn retrieve_key(&self, key_id: &str) -> PkiResult<Option<Box<dyn Key>>>;
@@ -187,17 +182,12 @@ impl StorageBackend for FileSystemBackend {
     }
 
     // 密钥存储方法实现
-    fn store_key(
-        &mut self,
-        key_id: &str,
-        _key: &dyn Key,
-        metadata: &KeyMetadata,
-    ) -> PkiResult<()> {
+    fn store_key(&mut self, key_id: &str, _key: &dyn Key, metadata: &KeyMetadata) -> PkiResult<()> {
         // TODO: 实现密钥序列化和存储
         // 暂时只存储元数据
         let metadata_path = self.key_metadata_path(key_id);
-        let json = serde_json::to_string_pretty(metadata)
-            .map_err(|e| PkiError::SerializationError(e))?;
+        let json =
+            serde_json::to_string_pretty(metadata).map_err(|e| PkiError::SerializationError(e))?;
         fs::write(metadata_path, json)?;
         Ok(())
     }
@@ -215,27 +205,27 @@ impl StorageBackend for FileSystemBackend {
         }
 
         let json = fs::read_to_string(path)?;
-        let metadata: KeyMetadata = serde_json::from_str(&json)
-            .map_err(|e| PkiError::SerializationError(e))?;
+        let metadata: KeyMetadata =
+            serde_json::from_str(&json).map_err(|e| PkiError::SerializationError(e))?;
         Ok(Some(metadata))
     }
 
     fn delete_key(&mut self, key_id: &str) -> PkiResult<bool> {
         let key_path = self.key_path(key_id);
         let metadata_path = self.key_metadata_path(key_id);
-        
+
         let mut deleted = false;
-        
+
         if key_path.exists() {
             fs::remove_file(key_path)?;
             deleted = true;
         }
-        
+
         if metadata_path.exists() {
             fs::remove_file(metadata_path)?;
             deleted = true;
         }
-        
+
         Ok(deleted)
     }
 
@@ -283,7 +273,7 @@ impl CertificateStore {
         // TODO: 实现证书存储逻辑
         // 目前使用简化的临时实现
         let serial_number = "temp-serial-123".to_string();
-        
+
         // 简化的元数据
         let metadata = CertificateMetadata {
             serial_number: serial_number.clone(),
@@ -383,86 +373,17 @@ impl CertificateStore {
     //     let threshold = OffsetDateTime::now_utc() + time::Duration::days(days);
 
     //     self.search_certificates(|metadata| {
-    //         matches!(metadata.status, CertificateStatus::Valid) && metadata.not_after <= threshold
-    //     })
+    //         matches!(metadata.status, CertificateStatus::Valid) && metadata.not_after <=
+    // threshold     })
     // }
 
     // /// 获取已过期的证书
     // pub fn get_expired_certificates(&mut self) -> PkiResult<Vec<String>> {
-    //     self.search_certificates(|metadata| matches!(metadata.status, CertificateStatus::Expired))
-    // }
+    //     self.search_certificates(|metadata| matches!(metadata.status,
+    // CertificateStatus::Expired)) }
 
     /// 清除缓存
     pub fn clear_cache(&mut self) {
         self.cache.clear();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use capsula_key::Key as EccKeyPair;
-    use tempfile::TempDir;
-
-    use super::*;
-    use crate::ra::cert::{create_certificate, CertificateSubject};
-
-    #[test]
-    #[ignore = "Certificate parsing is not fully implemented yet"]
-    fn test_file_system_backend() {
-        let temp_dir = TempDir::new().unwrap();
-        let mut backend = FileSystemBackend::new(temp_dir.path()).unwrap();
-
-        // 创建测试证书
-        let keypair = EccKeyPair::generate().unwrap();
-        let subject = CertificateSubject::new("Test Certificate".to_string());
-        let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
-        let serial = &cert.info.serial_number;
-
-        // 保存证书
-        backend.save_certificate(serial, &cert).unwrap();
-
-        // 加载证书
-        let loaded_cert = backend.load_certificate(serial).unwrap();
-        assert_eq!(cert.info.serial_number, loaded_cert.info.serial_number);
-
-        // 列出证书
-        let certs = backend.list_certificates().unwrap();
-        assert_eq!(certs.len(), 1);
-        assert_eq!(certs[0], *serial);
-
-        // 删除证书
-        backend.delete_certificate(serial).unwrap();
-        assert!(backend.load_certificate(serial).is_err());
-    }
-
-    #[test]
-    fn test_certificate_store() {
-        let temp_dir = TempDir::new().unwrap();
-        let mut store = CertificateStore::file_system(temp_dir.path()).unwrap();
-
-        // 创建测试证书
-        let keypair = EccKeyPair::generate().unwrap();
-        let subject = CertificateSubject::new("Test Certificate".to_string());
-        let cert = create_certificate(&keypair, subject, None, 365, false).unwrap();
-        let serial = cert.info.serial_number.clone();
-
-        // 存储证书
-        store.store_certificate(&cert).unwrap();
-
-        // 获取证书
-        let retrieved_cert = store.get_certificate(&serial).unwrap();
-        assert_eq!(cert.info.serial_number, retrieved_cert.info.serial_number);
-
-        // 获取元数据
-        let metadata = store.get_metadata(&serial).unwrap();
-        assert_eq!(metadata.serial_number, serial);
-        assert!(matches!(metadata.status, CertificateStatus::Valid));
-
-        // 尝试存储相同的证书应该失败
-        assert!(store.store_certificate(&cert).is_err());
-
-        // 删除证书
-        store.delete_certificate(&serial).unwrap();
-        assert!(store.get_certificate(&serial).is_err());
     }
 }

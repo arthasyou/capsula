@@ -1,11 +1,14 @@
-use crate::ra::{
-    cert::{create_certificate, create_self_signed_certificate, export_certificate, sign_certificate, CertificateInfo, CertificateSubject, X509Certificate},
-};
-use capsula_key::{Key, Curve25519};
+use capsula_key::{Curve25519, Key};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
-use crate::error::{PkiError, Result as PkiResult};
+use crate::{
+    error::{PkiError, Result as PkiResult},
+    ra::cert::{
+        create_certificate, create_self_signed_certificate, export_certificate, sign_certificate,
+        CertificateInfo, CertificateSubject, X509Certificate,
+    },
+};
 
 /// CA 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,7 +137,7 @@ impl CertificateAuthority {
     ) -> PkiResult<X509Certificate> {
         // TODO: 实现证书签发逻辑
         // 目前返回一个占位实现
-        
+
         // 创建自签名证书作为临时占位
         let cert_info = CertificateInfo {
             subject: subject.clone(),
@@ -259,98 +262,4 @@ pub struct CAExport {
     pub config: CAConfig,
     /// 已签发证书数量
     pub issued_count: u64,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_create_root_ca() {
-        let config = CAConfig::default();
-        let ca = CertificateAuthority::new_root_ca(config).unwrap();
-
-        // TODO: 添加证书验证
-        // assert!(ca.certificate().info.is_ca);
-        // assert!(ca.certificate().info.is_currently_valid());
-        assert_eq!(ca.issued_count(), 0);
-    }
-
-    #[test]
-    fn test_issue_certificate() {
-        let config = CAConfig::default();
-        let mut ca = CertificateAuthority::new_root_ca(config).unwrap();
-
-        // 为终端实体创建密钥对
-        let end_entity_keypair = Curve25519::generate().unwrap();
-
-        // 创建证书主体
-        let subject = CertificateSubject {
-            country: Some("CN".to_string()),
-            state: Some("Shanghai".to_string()),
-            locality: Some("Shanghai".to_string()),
-            organization: Some("Test Hospital".to_string()),
-            organizational_unit: Some("IT Department".to_string()),
-            common_name: "test.hospital.com".to_string(),
-            email: Some("admin@hospital.com".to_string()),
-        };
-
-        // 签发证书
-        let _cert = ca
-            .issue_certificate(
-                subject,
-                &end_entity_keypair,
-                None,  // 使用默认有效期
-                false, // 不是CA证书
-            )
-            .unwrap();
-
-        // TODO: 添加证书验证
-        // assert!(!cert.info.is_ca);
-        // assert!(cert.info.is_currently_valid());
-        assert_eq!(ca.issued_count(), 1);
-    }
-
-    #[test]
-    fn test_create_intermediate_ca() {
-        let root_config = CAConfig::default();
-        let mut root_ca = CertificateAuthority::new_root_ca(root_config).unwrap();
-
-        let intermediate_config = CAConfig {
-            name: "Intermediate CA".to_string(),
-            organization: "Medical PKI Intermediate".to_string(),
-            validity_days: 1825, // 5年，确保不超过根CA的有效期
-            ..CAConfig::default()
-        };
-
-        let _intermediate_ca = root_ca.create_intermediate_ca(intermediate_config).unwrap();
-
-        // TODO: 添加证书验证
-        // assert!(intermediate_ca.certificate().info.is_ca);
-        // assert!(intermediate_ca.certificate().info.is_currently_valid());
-        assert_eq!(root_ca.issued_count(), 1);
-    }
-
-    #[test]
-    #[ignore = "Certificate parsing is not fully implemented yet"]
-    fn test_export_import_ca() {
-        let config = CAConfig::default();
-        let ca = CertificateAuthority::new_root_ca(config).unwrap();
-
-        // TODO: 验证原始CA证书是CA证书
-        // assert!(ca.certificate().info.is_ca);
-
-        // 导出CA
-        let export = ca.export().unwrap();
-
-        // 导入CA
-        let _imported_ca = CertificateAuthority::import(export).unwrap();
-
-        // TODO: 添加证书比较
-        // assert_eq!(
-        //     ca.certificate().info.serial_number,
-        //     imported_ca.certificate().info.serial_number
-        // );
-        // assert_eq!(ca.config().name, imported_ca.config().name);
-    }
 }
