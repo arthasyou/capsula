@@ -32,12 +32,8 @@ impl RequestValidator {
 
         // 基本验证：检查CSR签名
         match csr.verify() {
-            Ok(true) => {
+            Ok(()) => {
                 // 签名有效
-            }
-            Ok(false) => {
-                errors.push("Invalid CSR signature".to_string());
-                score = score.saturating_sub(50);
             }
             Err(e) => {
                 errors.push(format!("CSR verification failed: {}", e));

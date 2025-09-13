@@ -6,16 +6,17 @@
 //! - 证书状态验证
 //! - 状态缓存
 
+pub mod cache;
 pub mod crl;
 pub mod ocsp;
 pub mod validator;
-pub mod cache;
 
 // 重新导出CRL相关类型
+use std::collections::HashMap;
+
 pub use crl::{CRLManager, CertificateRevocationList, RevocationEntry};
 
 use crate::error::Result;
-use std::collections::HashMap;
 
 /// 证书状态枚举
 #[derive(Debug, Clone, PartialEq)]
@@ -123,14 +124,15 @@ impl CertificateStatusManager {
                 let response = StatusResponse {
                     serial_number: serial_number.to_string(),
                     status: CertificateStatus::Revoked {
-                        reason: revocation_entry.reason.clone(),
-                        revoked_at: revocation_entry.revoked_at,
+                        reason: RevocationReason::Unspecified, /* TODO: 映射两个 RevocationReason
+                                                                * 类型 */
+                        revoked_at: revocation_entry.revocation_date,
                     },
                     query_time: time::OffsetDateTime::now_utc(),
                     source: "CRL".to_string(),
                     from_cache: false,
                 };
-                
+
                 self.cache_status_response(&response);
                 return Ok(response);
             }
@@ -155,7 +157,7 @@ impl CertificateStatusManager {
         if let Some(cached_response) = self.status_cache.get(serial_number) {
             let now = time::OffsetDateTime::now_utc();
             let cache_age = (now - cached_response.query_time).whole_seconds() as u64;
-            
+
             if cache_age < self.cache_ttl_seconds {
                 let mut response = cached_response.clone();
                 response.from_cache = true;
@@ -167,7 +169,8 @@ impl CertificateStatusManager {
 
     /// 缓存状态响应
     fn cache_status_response(&mut self, response: &StatusResponse) {
-        self.status_cache.insert(response.serial_number.clone(), response.clone());
+        self.status_cache
+            .insert(response.serial_number.clone(), response.clone());
     }
 
     /// 清理过期缓存

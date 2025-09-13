@@ -15,7 +15,7 @@ pub mod expiry_notification;
 pub mod policy;
 
 // 重新导出证书链相关类型
-pub use chain::{build_certificate_chain, ChainValidator, ValidationResult};
+pub use chain::{ChainValidator, ValidationResult, CertificateChain};
 
 use crate::error::Result;
 use time::OffsetDateTime;

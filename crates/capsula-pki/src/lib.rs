@@ -58,7 +58,7 @@ pub use keystore::{
 };
 // Lifecycle 模块
 pub use lifecycle::{
-    build_certificate_chain, ChainValidator, LifecycleManager, LifecyclePolicy, ValidationResult,
+    ChainValidator, LifecycleManager, LifecyclePolicy, ValidationResult,
 };
 pub use ra::{
     // CSR相关
