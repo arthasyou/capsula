@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum ApiError {
     /// 核心错误
     #[error("Core error: {0}")]
-    CoreError(#[from] capsula_core::CoreError),
+    CoreError(#[from] capsula_core::error::CoreError),
 
     /// 认证错误
     #[error("Authentication error: {0}")]
