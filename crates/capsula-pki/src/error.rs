@@ -95,6 +95,10 @@ pub enum PkiError {
     #[error("Authentication error: {0}")]
     AuthError(String),
 
+    /// 策略违反错误
+    #[error("Policy violation: {0}")]
+    PolicyViolation(String),
+
     /// IO错误
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),

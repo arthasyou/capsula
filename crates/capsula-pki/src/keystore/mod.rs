@@ -12,9 +12,15 @@ pub mod hsm;
 pub mod escrow;
 pub mod recovery;
 pub mod rotation;
+pub mod pki_adapter;
 
 // 重新导出存储相关类型
 pub use storage::{CertificateStore, FileSystemBackend, StorageBackend};
+// 重新导出PKI adapter类型
+pub use pki_adapter::{
+    PKIKeyStore, PKIKeyMetadata, PolicyConstraints, CertificateType, 
+    ExtendedKeyUsage, CertificateTemplate, PKIKeyStoreStatistics
+};
 
 use crate::error::Result;
 use capsula_key::Key;
