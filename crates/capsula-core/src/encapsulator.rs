@@ -221,18 +221,35 @@ impl CapsulaBuilder {
         for (kid, key) in recipient_keys {
             // 获取接收者的公钥
             let public_keys = key.public_keys();
-            if let Some(key_agreement_key) = public_keys.key_agreement_key() {
-                // TODO: 实现密钥协商和包装
-                // 这里需要使用ECDH或RSA加密CEK
+            println!("DEBUG ENCAP: Processing recipient kid: {}", kid);
+            
+            // 对于RSA密钥，尝试使用signing_key作为加密密钥
+            if let Some(signing_key) = public_keys.signing_key() {
+                println!("DEBUG ENCAP: Found signing key for {}, SPKI size: {}", kid, signing_key.spki_der.len());
+                let wrapped_cek = self.wrap_cek_for_key(cek, &signing_key.spki_der)?;
+
+                keyring.push(KeyWrap {
+                    kid: kid.clone(),
+                    alg: "RSA-OAEP".to_string(),
+                    cek_wrapped: general_purpose::STANDARD.encode(&wrapped_cek),
+                });
+                println!("DEBUG ENCAP: Successfully added keyring entry for {}", kid);
+            } else if let Some(key_agreement_key) = public_keys.key_agreement_key() {
+                println!("DEBUG ENCAP: Found key agreement key for {}", kid);
                 let wrapped_cek = self.wrap_cek_for_key(cek, &key_agreement_key.spki_der)?;
 
                 keyring.push(KeyWrap {
                     kid: kid.clone(),
-                    alg: "RSA-OAEP".to_string(), // 或根据密钥类型选择算法
+                    alg: "RSA-OAEP".to_string(),
                     cek_wrapped: general_purpose::STANDARD.encode(&wrapped_cek),
                 });
+                println!("DEBUG ENCAP: Successfully added keyring entry for {}", kid);
+            } else {
+                println!("DEBUG ENCAP: No suitable key found for kid: {}", kid);
             }
         }
+        
+        println!("DEBUG ENCAP: Final keyring size: {}", keyring.len());
 
         Ok(keyring)
     }

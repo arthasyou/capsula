@@ -3,7 +3,7 @@
 //! 实现1阶数据胶囊的解包功能，包括验证、解密、完整性检查等操作
 
 use base64::{engine::general_purpose, Engine as _};
-use capsula_crypto::{sha256, symmetric::aes::Aes, verify_signature};
+use capsula_crypto::{sha256, symmetric::aes::Aes, verify_signature, asymmetric::rsa};
 use capsula_key::{Curve25519, P256Key, RsaKey};
 use time::OffsetDateTime;
 
@@ -43,14 +43,18 @@ pub enum PrivateKeyWrapper {
 }
 
 impl PrivateKeyWrapper {
-    fn decrypt_cek(&self, _wrapped_cek: &[u8], algorithm: &str) -> Result<Vec<u8>> {
+    fn decrypt_cek(&self, wrapped_cek: &[u8], algorithm: &str) -> Result<Vec<u8>> {
         match (self, algorithm) {
-            (PrivateKeyWrapper::Rsa(_key), "RSA-OAEP") => {
-                // 这里需要实现RSA私钥解密功能
-                // TODO: 实现RSA私钥解密功能
-                Err(CoreError::DecapsulationError(
-                    "RSA decryption not implemented yet".to_string(),
-                ))
+            (PrivateKeyWrapper::Rsa(key), "RSA-OAEP") => {
+                // 使用capsula-crypto的RSA解密功能
+                use capsula_key::ExportablePrivateKey;
+                let private_key_der = key.to_pkcs8_der()
+                    .map_err(|e| CoreError::DecapsulationError(format!("Failed to export RSA private key: {}", e)))?;
+                let crypto_key = rsa::Rsa::from_pkcs8_der(&private_key_der)
+                    .map_err(|e| CoreError::DecapsulationError(format!("Failed to import RSA key for decryption: {}", e)))?;
+                let plaintext = crypto_key.decrypt(wrapped_cek)
+                    .map_err(|e| CoreError::DecapsulationError(format!("RSA decryption failed: {}", e)))?;
+                Ok(plaintext)
             }
             _ => Err(CoreError::DecapsulationError(format!(
                 "Unsupported key type or algorithm: {:?}/{}",
@@ -248,7 +252,7 @@ impl CapsuleDecryptor {
         }
 
         Err(CoreError::DecapsulationError(
-            "No suitable key found in keyring".to_string(),
+            format!("No suitable key found in keyring for user_id '{}'", self.user_id),
         ))
     }
 

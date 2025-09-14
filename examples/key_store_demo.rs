@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 6. 文件存储演示
     println!("\n6. 文件存储演示...");
-    let file_path = std::path::PathBuf::from("./test_keystore.dat");
+    let file_path = std::path::PathBuf::from("./key");
     let file_store = create_key_store(KeyStoreConfig::File {
         path: file_path.clone(),
         encryption_key: None, // 不加密，仅演示
