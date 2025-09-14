@@ -68,6 +68,7 @@ time = { version = "0.3", features = [
     "parsing",
 ] }
 hex = "0.4"
+uuid = { version = "1.8", features = ["v4"] }
 
 # 加密相关
 ed25519-dalek = { version = "2.2" }

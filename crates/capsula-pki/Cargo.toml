@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 hex = { workspace = true }
+uuid = { workspace = true }
 pkcs8 = { workspace = true }
 const-oid = "0.9"
 
