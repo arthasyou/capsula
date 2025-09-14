@@ -4,14 +4,17 @@
 //! adding certificate-key associations, PKI-specific policies, and enterprise features.
 
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 
 use capsula_key::{
-    Key, Algorithm as KeyAlgorithm,
-    store::{EnhancedKeyStore, EnhancedKeyMetadata, KeyUsage as StoreKeyUsage, KeyValidity}
+    store::{EnhancedKeyMetadata, EnhancedKeyStore, KeyUsage as StoreKeyUsage, KeyValidity},
+    Algorithm as KeyAlgorithm, Key,
 };
-use crate::ra::cert::X509Certificate;
-use crate::error::{Result, PkiError};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    error::{PkiError, Result},
+    ra::cert::X509Certificate,
+};
 
 /// PKI-specific key metadata extensions
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -130,12 +133,13 @@ impl PKIKeyStore {
         encryption_key: Option<Vec<u8>>,
     ) -> Result<Self> {
         use capsula_key::store::{create_key_store, KeyStoreConfig};
-        
+
         let key_store = create_key_store(KeyStoreConfig::File {
             path: path.as_ref().to_path_buf(),
             encryption_key,
-        }).map_err(|e| PkiError::KeyError(format!("Failed to create key store: {}", e)))?;
-        
+        })
+        .map_err(|e| PkiError::KeyError(format!("Failed to create key store: {}", e)))?;
+
         let enhanced_store = EnhancedKeyStore::new(key_store);
         Ok(Self::new(enhanced_store))
     }
@@ -143,10 +147,10 @@ impl PKIKeyStore {
     /// Create PKI KeyStore with memory backend (for testing)
     pub fn with_memory_backend() -> Result<Self> {
         use capsula_key::store::{create_key_store, KeyStoreConfig};
-        
+
         let key_store = create_key_store(KeyStoreConfig::Memory)
             .map_err(|e| PkiError::KeyError(format!("Failed to create key store: {}", e)))?;
-        
+
         let enhanced_store = EnhancedKeyStore::new(key_store);
         Ok(Self::new(enhanced_store))
     }
@@ -160,11 +164,15 @@ impl PKIKeyStore {
         policy_constraints: Option<PolicyConstraints>,
     ) -> Result<capsula_key::store::KeyHandle> {
         // Store in underlying enhanced store
-        let handle = self.inner.store_key_object(key, usage.clone(), validity.clone())
+        let handle = self
+            .inner
+            .store_key_object(key, usage.clone(), validity.clone())
             .map_err(|e| PkiError::KeyError(format!("Failed to store key: {}", e)))?;
 
         // Get the enhanced metadata
-        let enhanced_metadata = self.inner.get_enhanced_metadata(handle)
+        let enhanced_metadata = self
+            .inner
+            .get_enhanced_metadata(handle)
             .map_err(|e| PkiError::KeyError(format!("Failed to get enhanced metadata: {}", e)))?;
 
         // Create PKI metadata
@@ -184,14 +192,19 @@ impl PKIKeyStore {
 
     /// Retrieve a key by handle
     pub fn get_pki_key(&self, handle: capsula_key::store::KeyHandle) -> Result<Box<dyn Key>> {
-        self.inner.get_key_object(handle)
+        self.inner
+            .get_key_object(handle)
             .map_err(|e| PkiError::KeyError(format!("Failed to retrieve key: {}", e)))
     }
 
     /// Get PKI-specific metadata for a key
-    pub fn get_pki_metadata(&self, handle: capsula_key::store::KeyHandle) -> Result<&PKIKeyMetadata> {
-        self.pki_metadata_cache.get(&handle)
-            .ok_or_else(|| PkiError::KeyError(format!("PKI metadata not found for key: {:?}", handle)))
+    pub fn get_pki_metadata(
+        &self,
+        handle: capsula_key::store::KeyHandle,
+    ) -> Result<&PKIKeyMetadata> {
+        self.pki_metadata_cache.get(&handle).ok_or_else(|| {
+            PkiError::KeyError(format!("PKI metadata not found for key: {:?}", handle))
+        })
     }
 
     /// Associate a certificate with a key
@@ -202,13 +215,16 @@ impl PKIKeyStore {
         cert_serial: String,
     ) -> Result<()> {
         // Update the enhanced store
-        self.inner.associate_certificate(key_handle, cert_serial.clone())
+        self.inner
+            .associate_certificate(key_handle, cert_serial.clone())
             .map_err(|e| PkiError::KeyError(format!("Failed to associate certificate: {}", e)))?;
 
         // Update PKI metadata
         if let Some(pki_metadata) = self.pki_metadata_cache.get_mut(&key_handle) {
             if !pki_metadata.associated_certificates.contains(&cert_serial) {
-                pki_metadata.associated_certificates.push(cert_serial.clone());
+                pki_metadata
+                    .associated_certificates
+                    .push(cert_serial.clone());
             }
         }
 
@@ -219,7 +235,10 @@ impl PKIKeyStore {
     }
 
     /// Find key by associated certificate serial number
-    pub fn find_key_by_certificate(&self, cert_serial: &str) -> Option<capsula_key::store::KeyHandle> {
+    pub fn find_key_by_certificate(
+        &self,
+        cert_serial: &str,
+    ) -> Option<capsula_key::store::KeyHandle> {
         self.cert_key_mapping.get(cert_serial).copied()
     }
 
@@ -252,13 +271,26 @@ impl PKIKeyStore {
     }
 
     /// List all keys with their PKI information
-    pub fn list_pki_keys(&self) -> Result<Vec<(capsula_key::store::KeyHandle, KeyAlgorithm, String, Vec<String>)>> {
-        let basic_info = self.inner.list_keys_with_info()
+    pub fn list_pki_keys(
+        &self,
+    ) -> Result<
+        Vec<(
+            capsula_key::store::KeyHandle,
+            KeyAlgorithm,
+            String,
+            Vec<String>,
+        )>,
+    > {
+        let basic_info = self
+            .inner
+            .list_keys_with_info()
             .map_err(|e| PkiError::KeyError(format!("Failed to list keys: {}", e)))?;
 
         let mut result = Vec::new();
         for (handle, algorithm, key_id) in basic_info {
-            let associated_certs = self.pki_metadata_cache.get(&handle)
+            let associated_certs = self
+                .pki_metadata_cache
+                .get(&handle)
                 .map(|meta| meta.associated_certificates.clone())
                 .unwrap_or_default();
             result.push((handle, algorithm, key_id, associated_certs));
@@ -274,13 +306,17 @@ impl PKIKeyStore {
         cert_type: CertificateType,
     ) -> Result<bool> {
         let pki_metadata = self.get_pki_metadata(handle)?;
-        Ok(pki_metadata.policy_constraints.allowed_cert_types.contains(&cert_type))
+        Ok(pki_metadata
+            .policy_constraints
+            .allowed_cert_types
+            .contains(&cert_type))
     }
 
     /// Delete a key and all its PKI metadata
     pub fn delete_pki_key(&mut self, handle: capsula_key::store::KeyHandle) -> Result<()> {
         // Remove from enhanced store
-        self.inner.delete_key_complete(handle)
+        self.inner
+            .delete_key_complete(handle)
             .map_err(|e| PkiError::KeyError(format!("Failed to delete key: {}", e)))?;
 
         // Clean up PKI metadata and mappings
@@ -343,7 +379,7 @@ impl PKIKeyStore {
     /// Get statistics about the PKI key store
     pub fn get_statistics(&self) -> Result<PKIKeyStoreStatistics> {
         let all_keys = self.list_pki_keys()?;
-        
+
         let mut stats = PKIKeyStoreStatistics {
             total_keys: all_keys.len(),
             keys_by_algorithm: HashMap::new(),
@@ -354,8 +390,11 @@ impl PKIKeyStore {
 
         for (handle, algorithm, _, associated_certs) in &all_keys {
             // Count by algorithm
-            *stats.keys_by_algorithm.entry(format!("{:?}", algorithm)).or_insert(0) += 1;
-            
+            *stats
+                .keys_by_algorithm
+                .entry(format!("{:?}", algorithm))
+                .or_insert(0) += 1;
+
             // Count associated certificates
             stats.total_associated_certificates += associated_certs.len();
 
@@ -367,7 +406,10 @@ impl PKIKeyStore {
 
                 // Count by allowed certificate types
                 for cert_type in &pki_metadata.policy_constraints.allowed_cert_types {
-                    *stats.keys_by_certificate_type.entry(format!("{:?}", cert_type)).or_insert(0) += 1;
+                    *stats
+                        .keys_by_certificate_type
+                        .entry(format!("{:?}", cert_type))
+                        .or_insert(0) += 1;
                 }
             }
         }
@@ -394,8 +436,9 @@ impl Default for PolicyConstraints {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use capsula_key::{Curve25519, P256Key};
+
+    use super::*;
 
     #[test]
     fn test_pki_keystore_creation() {
@@ -406,23 +449,25 @@ mod tests {
     #[test]
     fn test_store_and_retrieve_pki_key() {
         let mut pki_store = PKIKeyStore::with_memory_backend().unwrap();
-        
+
         // Generate test key
         let key = Curve25519::generate().unwrap();
-        
+
         // Store with custom policy
         let custom_policy = PolicyConstraints {
             max_cert_validity_days: Some(90),
             allowed_cert_types: vec![CertificateType::EndEntity],
             ..Default::default()
         };
-        
-        let handle = pki_store.store_pki_key(
-            &key,
-            vec![StoreKeyUsage::DigitalSignature],
-            None,
-            Some(custom_policy.clone()),
-        ).unwrap();
+
+        let handle = pki_store
+            .store_pki_key(
+                &key,
+                vec![StoreKeyUsage::DigitalSignature],
+                None,
+                Some(custom_policy.clone()),
+            )
+            .unwrap();
 
         // Retrieve key
         let retrieved_key = pki_store.get_pki_key(handle).unwrap();
@@ -430,29 +475,32 @@ mod tests {
 
         // Check PKI metadata
         let pki_metadata = pki_store.get_pki_metadata(handle).unwrap();
-        assert_eq!(pki_metadata.policy_constraints.max_cert_validity_days, Some(90));
-        assert_eq!(pki_metadata.policy_constraints.allowed_cert_types, vec![CertificateType::EndEntity]);
+        assert_eq!(
+            pki_metadata.policy_constraints.max_cert_validity_days,
+            Some(90)
+        );
+        assert_eq!(
+            pki_metadata.policy_constraints.allowed_cert_types,
+            vec![CertificateType::EndEntity]
+        );
     }
 
     #[test]
     #[ignore] // TODO: Complete when X509Certificate integration is ready
     fn test_certificate_association() {
         let mut pki_store = PKIKeyStore::with_memory_backend().unwrap();
-        
+
         let key = P256Key::generate().unwrap();
-        let handle = pki_store.store_pki_key(
-            &key,
-            vec![StoreKeyUsage::DigitalSignature],
-            None,
-            None,
-        ).unwrap();
+        let handle = pki_store
+            .store_pki_key(&key, vec![StoreKeyUsage::DigitalSignature], None, None)
+            .unwrap();
 
         // TODO: This test will be completed once X509Certificate integration is ready
-        let cert_serial = "test-cert-123";
-        
+        let _cert_serial = "test-cert-123";
+
         // For now, just test that the handle was created successfully
         assert!(pki_store.get_pki_key(handle).is_ok());
-        
+
         // Future implementation:
         // let test_cert = create_test_certificate();
         // pki_store.associate_certificate(handle, &test_cert, cert_serial.to_string()).unwrap();
@@ -463,64 +511,59 @@ mod tests {
     #[test]
     fn test_policy_validation() {
         let mut pki_store = PKIKeyStore::with_memory_backend().unwrap();
-        
+
         let key = Curve25519::generate().unwrap();
         let custom_policy = PolicyConstraints {
             max_cert_validity_days: Some(30),
             allowed_cert_types: vec![CertificateType::EndEntity],
             ..Default::default()
         };
-        
-        let handle = pki_store.store_pki_key(
-            &key,
-            vec![StoreKeyUsage::DigitalSignature],
-            None,
-            Some(custom_policy),
-        ).unwrap();
+
+        let handle = pki_store
+            .store_pki_key(
+                &key,
+                vec![StoreKeyUsage::DigitalSignature],
+                None,
+                Some(custom_policy),
+            )
+            .unwrap();
 
         // Test valid policy
-        assert!(pki_store.validate_key_policy(
-            handle,
-            CertificateType::EndEntity,
-            30
-        ).is_ok());
+        assert!(pki_store
+            .validate_key_policy(handle, CertificateType::EndEntity, 30)
+            .is_ok());
 
         // Test invalid certificate type
-        assert!(pki_store.validate_key_policy(
-            handle,
-            CertificateType::RootCA,
-            30
-        ).is_err());
+        assert!(pki_store
+            .validate_key_policy(handle, CertificateType::RootCA, 30)
+            .is_err());
 
         // Test invalid validity period
-        assert!(pki_store.validate_key_policy(
-            handle,
-            CertificateType::EndEntity,
-            365
-        ).is_err());
+        assert!(pki_store
+            .validate_key_policy(handle, CertificateType::EndEntity, 365)
+            .is_err());
     }
 
     #[test]
     fn test_pki_keystore_statistics() {
         let mut pki_store = PKIKeyStore::with_memory_backend().unwrap();
-        
+
         // Store different types of keys
         let curve25519_key = Curve25519::generate().unwrap();
         let p256_key = P256Key::generate().unwrap();
-        
-        pki_store.store_pki_key(
-            &curve25519_key,
-            vec![StoreKeyUsage::DigitalSignature],
-            None,
-            None,
-        ).unwrap();
-        
-        pki_store.store_pki_key(
-            &p256_key,
-            vec![StoreKeyUsage::KeyAgreement],
-            None,
-            None,
-        ).unwrap();
+
+        pki_store
+            .store_pki_key(
+                &curve25519_key,
+                vec![StoreKeyUsage::DigitalSignature],
+                None,
+                None,
+            )
+            .unwrap();
+
+        pki_store
+            .store_pki_key(&p256_key, vec![StoreKeyUsage::KeyAgreement], None, None)
+            .unwrap();
 
         let stats = pki_store.get_statistics().unwrap();
         assert_eq!(stats.total_keys, 2);
