@@ -287,7 +287,6 @@ impl CapsulaBuilder {
 
 #[cfg(test)]
 mod tests {
-    use capsula_key::{Curve25519, P256Key, RsaKey};
 
     use super::*;
 

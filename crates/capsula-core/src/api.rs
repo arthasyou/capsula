@@ -5,18 +5,19 @@
 use capsula_key::{Key, KeySign};
 use time::OffsetDateTime;
 
-use crate::encapsulator::CapsulaBuilder;
-use crate::decapsulator::{CapsuleDecryptor, DecapsulationResult};
-use crate::error::{CoreError, Result};
-use crate::protocol::capsule::Capsula1;
-use crate::protocol::types::CapsulaGranted;
+use crate::{
+    decapsulator::{CapsuleDecryptor, DecapsulationResult},
+    encapsulator::CapsulaBuilder,
+    error::{CoreError, Result},
+    protocol::{capsule::Capsula1, types::CapsulaGranted},
+};
 
 /// 数据胶囊API
 pub struct CapsulaApi;
 
 impl CapsulaApi {
     /// 简单封包操作
-    /// 
+    ///
     /// # 参数
     /// * `data` - 原始数据
     /// * `data_type` - 数据类型（如 "medical.blood_test"）
@@ -73,7 +74,7 @@ impl CapsulaApi {
     }
 
     /// 简单解包操作（RSA密钥）
-    /// 
+    ///
     /// # 参数
     /// * `capsule` - 数据胶囊
     /// * `private_key` - 接收者的RSA私钥
@@ -86,7 +87,7 @@ impl CapsulaApi {
         producer_public_key: Option<Vec<u8>>,
     ) -> Result<DecapsulationResult> {
         let mut decryptor = CapsuleDecryptor::new_rsa(private_key, user_id);
-        
+
         if let Some(pub_key) = producer_public_key {
             decryptor = decryptor.with_producer_public_key(pub_key);
         }
@@ -95,7 +96,7 @@ impl CapsulaApi {
     }
 
     /// 简单解包操作（P256密钥）
-    /// 
+    ///
     /// # 参数
     /// * `capsule` - 数据胶囊
     /// * `private_key` - 接收者的P256私钥
@@ -108,7 +109,7 @@ impl CapsulaApi {
         producer_public_key: Option<Vec<u8>>,
     ) -> Result<DecapsulationResult> {
         let mut decryptor = CapsuleDecryptor::new_p256(private_key, user_id);
-        
+
         if let Some(pub_key) = producer_public_key {
             decryptor = decryptor.with_producer_public_key(pub_key);
         }
@@ -125,7 +126,7 @@ impl CapsulaApi {
         // 创建一个临时的虚拟密钥用于验证
         let dummy_key = capsula_key::RsaKey::generate_2048()
             .map_err(|e| CoreError::Other(format!("Failed to create dummy key: {}", e)))?;
-        
+
         let decryptor = if let Some(pub_key) = producer_public_key {
             CapsuleDecryptor::new_rsa(dummy_key, user_id.unwrap_or_default())
                 .with_producer_public_key(pub_key)
@@ -135,9 +136,9 @@ impl CapsulaApi {
 
         // 只进行结构和签名验证，不解密
         match decryptor.decapsulate(capsule) {
-            Ok(result) => Ok(result.verification.signature_valid && 
-                            result.verification.policy_valid && 
-                            result.verification.time_valid),
+            Ok(result) => Ok(result.verification.signature_valid
+                && result.verification.policy_valid
+                && result.verification.time_valid),
             Err(_) => Ok(false),
         }
     }
@@ -154,9 +155,8 @@ pub fn create_medical_capsule<S: KeySign>(
     expires_in_days: Option<u64>,
 ) -> Result<Capsula1> {
     let data_type = format!("medical.{}", report_type);
-    let expires_at = expires_in_days.map(|days| {
-        OffsetDateTime::now_utc() + time::Duration::days(days as i64)
-    });
+    let expires_at =
+        expires_in_days.map(|days| OffsetDateTime::now_utc() + time::Duration::days(days as i64));
 
     CapsulaApi::encapsulate_with_policy(
         medical_data,
@@ -187,15 +187,16 @@ pub fn decrypt_medical_capsule_rsa(
 
 #[cfg(test)]
 mod tests {
+    use capsula_key::{Key, RsaKey};
+
     use super::*;
-    use capsula_key::{RsaKey, Key, KeySign};
 
     #[test]
     fn test_simple_encapsulation() {
         let data = b"Test medical report".to_vec();
         let producer_key = RsaKey::generate_2048().unwrap();
         let recipient_key = RsaKey::generate_2048().unwrap();
-        
+
         let recipients = vec![("user1".to_string(), &recipient_key as &dyn Key)];
 
         let result = CapsulaApi::encapsulate_simple(
@@ -219,7 +220,7 @@ mod tests {
         let medical_data = b"Blood test results: Normal".to_vec();
         let doctor_key = RsaKey::generate_2048().unwrap();
         let nurse_key = RsaKey::generate_2048().unwrap();
-        
+
         let authorized_users = vec![("nurse1".to_string(), &nurse_key as &dyn Key)];
 
         let result = create_medical_capsule(
@@ -253,7 +254,8 @@ mod tests {
             "Owner".to_string(),
             &producer_key,
             &recipients,
-        ).unwrap();
+        )
+        .unwrap();
 
         // TODO: 需要实现公钥导出功能才能完整测试签名验证
         let verification_result = CapsulaApi::verify_capsule(
