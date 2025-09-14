@@ -12,10 +12,11 @@ pub struct StatusValidationResult {
 }
 
 /// 状态验证器
-pub struct StatusValidator;
+#[derive(Debug, Clone)]
+pub struct CertificateValidator;
 
-impl StatusValidator {
-    /// 创建新的状态验证器
+impl CertificateValidator {
+    /// 创建新的证书验证器
     pub fn new() -> Self {
         Self
     }
