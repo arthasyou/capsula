@@ -5,20 +5,21 @@
 //! - 身份认证（个人/设备/服务）
 //! - 审批流程控制（手动/自动）
 
-pub mod csr;
-pub mod cert;
-pub mod request_handler;
-pub mod identity_auth;
 pub mod approval_workflow;
+pub mod cert;
+pub mod csr;
+pub mod identity_auth;
+pub mod request_handler;
 pub mod validation;
 
 // 重新导出CSR和证书相关类型
-pub use csr::{create_csr, CertificateSigningRequest, Csr, CsrSubject, CertReqInfo, build_unsigned};
 pub use cert::{
     create_certificate, create_self_signed_certificate, export_certificate, import_certificate,
     parse_certificate, sign_certificate, verify_certificate, CertificateInfo, CertificateSubject,
     X509Certificate,
 };
+pub use csr::{build_unsigned, create_csr, CertReqInfo, Csr, CsrSubject, PublicKeyInfo};
+pub use validation::{RequestValidator, ValidationPolicy, ValidationResult, ValidationSeverity, ValidationIssue};
 
 use crate::error::Result;
 

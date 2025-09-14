@@ -20,6 +20,17 @@ use x509_cert::{
 
 use crate::{error::PkiError, Result};
 
+/// 公钥信息
+#[derive(Debug, Clone)]
+pub struct PublicKeyInfo {
+    /// 算法标识符
+    pub algorithm: String,
+    /// 密钥大小（适用于RSA）
+    pub key_size: Option<u32>,
+    /// 公钥数据
+    pub public_key_data: Vec<u8>,
+}
+
 /// Certificate Signing Request (CSR) with Capsula Key integration
 #[derive(Debug, Clone)]
 pub struct Csr {
@@ -119,9 +130,6 @@ pub fn create_csr<K: Key + KeySign>(key: &K, subject: CsrSubject) -> Result<Csr>
     // Assemble the complete CSR
     Csr::assemble(cert_req_info, &signature_bytes)
 }
-
-/// Type alias for backward compatibility
-pub type CertificateSigningRequest = Csr;
 
 impl Csr {
     /// Assemble a complete CSR from CertReqInfo and signature
@@ -431,6 +439,43 @@ impl Csr {
             state: None,
             locality: None,
         }
+    }
+
+    /// Get public key info for validation
+    pub fn get_public_key_info(&self) -> Result<PublicKeyInfo> {
+        let spki = &self.inner.info.public_key;
+        
+        // 解析算法标识符
+        let algorithm = match spki.algorithm.oid {
+            const_oid::db::rfc8410::ID_ED_25519 => "Ed25519".to_string(),
+            const_oid::db::rfc5912::ID_RSASSA_PSS => "RSA".to_string(),
+            const_oid::db::rfc5912::RSA_ENCRYPTION => "RSA".to_string(),
+            const_oid::db::rfc5912::ID_EC_PUBLIC_KEY => "ECDSA".to_string(),
+            _ => format!("Unknown({})", spki.algorithm.oid),
+        };
+
+        // 获取公钥数据
+        let public_key_data = spki.subject_public_key.raw_bytes().to_vec();
+
+        // 对于 RSA，尝试估算密钥长度
+        let key_size = if algorithm == "RSA" {
+            // RSA 公钥的 DER 编码大小大致可以估算密钥长度
+            // 这是一个粗略估算，实际密钥长度需要解析 ASN.1 结构
+            match public_key_data.len() {
+                200..=299 => Some(2048), // 2048位 RSA 公钥大约 270 字节
+                300..=399 => Some(3072), // 3072位 RSA 公钥大约 390 字节  
+                400..=600 => Some(4096), // 4096位 RSA 公钥大约 550 字节
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        Ok(PublicKeyInfo {
+            algorithm,
+            key_size,
+            public_key_data,
+        })
     }
 }
 

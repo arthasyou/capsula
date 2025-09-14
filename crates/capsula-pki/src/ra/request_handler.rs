@@ -2,9 +2,12 @@
 //!
 //! 负责接收、验证和处理证书签名请求
 
-use crate::ra::csr::CertificateSigningRequest;
-use crate::error::{PkiError, Result};
 use std::collections::HashMap;
+
+use crate::{
+    error::{PkiError, Result},
+    Csr,
+};
 
 /// 请求状态
 #[derive(Debug, Clone, PartialEq)]
@@ -27,7 +30,7 @@ pub struct CsrRequest {
     /// 请求ID
     pub request_id: String,
     /// CSR内容
-    pub csr: CertificateSigningRequest,
+    pub csr: Csr,
     /// 请求状态
     pub status: RequestStatus,
     /// 提交时间
@@ -56,10 +59,10 @@ impl RequestHandler {
     }
 
     /// 接收新的CSR请求
-    pub fn receive_request(&mut self, csr: CertificateSigningRequest) -> Result<String> {
+    pub fn receive_request(&mut self, csr: Csr) -> Result<String> {
         self.request_counter += 1;
         let request_id = format!("REQ-{:08}", self.request_counter);
-        
+
         let request = CsrRequest {
             request_id: request_id.clone(),
             csr,
@@ -85,9 +88,11 @@ impl RequestHandler {
         status: RequestStatus,
         notes: Option<String>,
     ) -> Result<()> {
-        let request = self.pending_requests.get_mut(request_id)
+        let request = self
+            .pending_requests
+            .get_mut(request_id)
             .ok_or_else(|| PkiError::NotFound(format!("Request {} not found", request_id)))?;
-        
+
         request.status = status;
         request.updated_at = time::OffsetDateTime::now_utc();
         if let Some(notes) = notes {

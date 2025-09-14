@@ -57,9 +57,7 @@ pub use keystore::{
     StorageBackend,
 };
 // Lifecycle 模块
-pub use lifecycle::{
-    ChainValidator, LifecycleManager, LifecyclePolicy, ValidationResult,
-};
+pub use lifecycle::{ChainValidator, LifecycleManager, LifecyclePolicy, ValidationResult};
 pub use ra::{
     // CSR相关
     build_unsigned,
@@ -74,7 +72,6 @@ pub use ra::{
     verify_certificate,
     CertReqInfo,
     CertificateInfo,
-    CertificateSigningRequest,
     CertificateSubject,
     Csr,
     CsrSubject,
@@ -111,7 +108,6 @@ pub mod prelude {
         create_self_signed_certificate,
         CertReqInfo,
         CertificateInfo,
-        CertificateSigningRequest,
         CertificateSubject,
         Csr,
         CsrSubject,
