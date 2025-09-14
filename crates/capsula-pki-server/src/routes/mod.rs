@@ -3,7 +3,7 @@ use toolcraft_axum_kit::middleware::cors::create_cors;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::handlers::{ca, certificate};
+use crate::handlers::{ca, certificate, simple_ca};
 use crate::models::{ca::*, certificate::*};
 
 #[derive(OpenApi)]
@@ -50,6 +50,7 @@ pub fn create_routes() -> Router {
     let doc = ApiDoc::openapi();
 
     Router::new()
+        .merge(simple_ca::create_simple_router())
         .merge(ca::create_router())
         .merge(certificate::create_router())
         .layer(cors)
