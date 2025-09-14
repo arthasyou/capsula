@@ -27,6 +27,10 @@ pub enum PkiError {
     #[error("Chain validation error: {0}")]
     ChainError(String),
 
+    /// 生命周期管理错误
+    #[error("Lifecycle management error: {0}")]
+    LifecycleError(String),
+
     /// 证书已存在
     #[error("Certificate already exists: {0}")]
     CertificateExists(String),

@@ -57,7 +57,7 @@ pub use keystore::{
     StorageBackend,
 };
 // Lifecycle 模块
-pub use lifecycle::{ChainValidator, LifecycleManager, LifecyclePolicy, ValidationResult};
+pub use lifecycle::{LifecycleManager, LifecyclePolicy};
 pub use ra::{
     // CSR相关
     build_unsigned,
@@ -98,7 +98,7 @@ pub mod prelude {
     // pub use crate::ca::{CAConfig, CertificateAuthority};
 
     // Lifecycle 模块
-    pub use crate::lifecycle::{ChainValidator, LifecycleManager, LifecyclePolicy};
+    pub use crate::lifecycle::{LifecycleManager, LifecyclePolicy};
     pub use crate::ra::{
         // CSR操作
         build_unsigned,
