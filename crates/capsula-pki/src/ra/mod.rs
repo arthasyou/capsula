@@ -5,10 +5,10 @@
 //! - 身份认证（个人/设备/服务）
 //! - 审批流程控制（手动/自动）
 
-pub mod approval_workflow;
+pub mod approval;
 pub mod cert;
 pub mod csr;
-pub mod identity_auth;
+pub mod identity;
 pub mod validation;
 
 // 重新导出CSR和证书相关类型
@@ -18,15 +18,13 @@ pub use cert::{
     X509Certificate,
 };
 pub use csr::{build_unsigned, create_csr, CertReqInfo, Csr, CsrSubject, PublicKeyInfo};
-pub use identity_auth::{
+pub use identity::{
     AuthResult, IdentityAuth, IdentityContext, IdentityType, TrustEvaluator,
     TrustPolicy as IdentityTrustPolicy, VerificationCredential, VerificationMethod,
 };
 pub use validation::{
-    RequestValidator, ValidationIssue, ValidationPolicy, ValidationResult, ValidationSeverity,
+    ValidationIssue, ValidationOutcome, ValidationPolicy, ValidationSeverity, Validator,
 };
-
-use crate::error::Result;
 
 /// RA配置
 #[derive(Debug, Clone)]

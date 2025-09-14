@@ -9,7 +9,7 @@
 
 use std::collections::HashSet;
 
-use crate::{error::Result, Csr, CsrSubject, PkiError};
+use crate::{error::Result, Csr};
 
 /// 验证严重级别
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -39,7 +39,7 @@ pub struct ValidationIssue {
 
 /// 验证结果
 #[derive(Debug, Clone)]
-pub struct ValidationResult {
+pub struct ValidationOutcome {
     /// 是否通过验证
     pub is_valid: bool,
     /// 验证问题列表
@@ -50,12 +50,17 @@ pub struct ValidationResult {
     pub trust_level: u8,
 }
 
-impl ValidationResult {
+impl ValidationOutcome {
     /// 获取错误消息
     pub fn get_errors(&self) -> Vec<String> {
         self.issues
             .iter()
-            .filter(|issue| matches!(issue.severity, ValidationSeverity::Error | ValidationSeverity::Critical))
+            .filter(|issue| {
+                matches!(
+                    issue.severity,
+                    ValidationSeverity::Error | ValidationSeverity::Critical
+                )
+            })
             .map(|issue| issue.message.clone())
             .collect()
     }
@@ -122,8 +127,8 @@ impl Default for ValidationPolicy {
         Self {
             min_key_size: 2048, // RSA 最小长度
             allowed_algorithms,
-            max_validity_days: 1095, // 3年，数据胶囊证书有效期较长
-            require_common_name: true, // 数据胶囊实体必须有标识符
+            max_validity_days: 1095,     // 3年，数据胶囊证书有效期较长
+            require_common_name: true,   // 数据胶囊实体必须有标识符
             require_organization: false, // 组织信息可选，独立实体可能没有
             allowed_entity_types,
             validate_key_usage: true,
@@ -132,12 +137,12 @@ impl Default for ValidationPolicy {
 }
 
 /// 请求验证器
-pub struct RequestValidator {
+pub struct Validator {
     /// 验证策略
     policy: ValidationPolicy,
 }
 
-impl RequestValidator {
+impl Validator {
     /// 创建新的请求验证器
     pub fn new() -> Self {
         Self {
@@ -161,7 +166,7 @@ impl RequestValidator {
     }
 
     /// 验证CSR请求
-    pub fn validate_csr(&self, csr: &Csr) -> Result<ValidationResult> {
+    pub fn validate_csr(&self, csr: &Csr) -> Result<ValidationOutcome> {
         let mut issues = Vec::new();
         let mut score = 100u8;
 
@@ -183,13 +188,16 @@ impl RequestValidator {
         self.validate_datacapsule_compliance(csr, &mut issues, &mut score)?;
 
         // 6. 计算最终结果
-        let has_critical_or_error = issues
-            .iter()
-            .any(|issue| matches!(issue.severity, ValidationSeverity::Error | ValidationSeverity::Critical));
+        let has_critical_or_error = issues.iter().any(|issue| {
+            matches!(
+                issue.severity,
+                ValidationSeverity::Error | ValidationSeverity::Critical
+            )
+        });
 
         let trust_level = self.calculate_trust_level(score, &issues);
 
-        Ok(ValidationResult {
+        Ok(ValidationOutcome {
             is_valid: !has_critical_or_error,
             issues,
             score,
@@ -198,7 +206,12 @@ impl RequestValidator {
     }
 
     /// 验证CSR签名
-    fn validate_signature(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
+    fn validate_signature(
+        &self,
+        csr: &Csr,
+        issues: &mut Vec<ValidationIssue>,
+        score: &mut u8,
+    ) -> Result<()> {
         match csr.verify() {
             Ok(()) => {
                 issues.push(ValidationIssue {
@@ -222,7 +235,12 @@ impl RequestValidator {
     }
 
     /// 验证主题信息
-    fn validate_subject_info(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
+    fn validate_subject_info(
+        &self,
+        csr: &Csr,
+        issues: &mut Vec<ValidationIssue>,
+        score: &mut u8,
+    ) -> Result<()> {
         let subject_info = csr.get_subject_info();
 
         // 检查 Common Name
@@ -275,9 +293,14 @@ impl RequestValidator {
     }
 
     /// 验证公钥和算法
-    fn validate_public_key(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
+    fn validate_public_key(
+        &self,
+        csr: &Csr,
+        issues: &mut Vec<ValidationIssue>,
+        score: &mut u8,
+    ) -> Result<()> {
         let public_key_info = csr.get_public_key_info()?;
-        
+
         // 检查算法是否被允许
         let algorithm = &public_key_info.algorithm;
         if !self.policy.allowed_algorithms.contains(algorithm) {
@@ -303,7 +326,10 @@ impl RequestValidator {
                 if key_size < self.policy.min_key_size {
                     issues.push(ValidationIssue {
                         severity: ValidationSeverity::Error,
-                        message: format!("RSA key size {} is below minimum {}", key_size, self.policy.min_key_size),
+                        message: format!(
+                            "RSA key size {} is below minimum {}",
+                            key_size, self.policy.min_key_size
+                        ),
                         code: "KEY_SIZE_TOO_SMALL".to_string(),
                         field: Some("public_key.key_size".to_string()),
                     });
@@ -323,7 +349,12 @@ impl RequestValidator {
     }
 
     /// 验证密钥用途
-    fn validate_key_usage(&self, _csr: &Csr, issues: &mut Vec<ValidationIssue>, _score: &mut u8) -> Result<()> {
+    fn validate_key_usage(
+        &self,
+        _csr: &Csr,
+        issues: &mut Vec<ValidationIssue>,
+        _score: &mut u8,
+    ) -> Result<()> {
         // TODO: 实现密钥用途验证
         // 需要从CSR中提取密钥用途扩展并验证
         issues.push(ValidationIssue {
@@ -336,7 +367,12 @@ impl RequestValidator {
     }
 
     /// 验证数据胶囊实体合规性
-    fn validate_datacapsule_compliance(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
+    fn validate_datacapsule_compliance(
+        &self,
+        csr: &Csr,
+        issues: &mut Vec<ValidationIssue>,
+        score: &mut u8,
+    ) -> Result<()> {
         let subject_info = csr.get_subject_info();
         let common_name = &subject_info.common_name;
 
@@ -356,10 +392,13 @@ impl RequestValidator {
 
         // 验证组织信息（对权威机构和成员实体可能重要）
         if self.policy.require_organization {
-            if subject_info.organization.is_none() || subject_info.organization.as_ref().unwrap().is_empty() {
+            if subject_info.organization.is_none()
+                || subject_info.organization.as_ref().unwrap().is_empty()
+            {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Error,
-                    message: "Entity must specify organization (authority/company name)".to_string(),
+                    message: "Entity must specify organization (authority/company name)"
+                        .to_string(),
                     code: "ENTITY_ORG_MISSING".to_string(),
                     field: Some("subject.organization".to_string()),
                 });
@@ -388,8 +427,15 @@ impl RequestValidator {
 
         // 数据胶囊实体标识符格式检查（支持多种格式）
         // 示例: "AUTHORITY_001", "User.Zhang", "DEVICE_12345", "Beijing_Company_ICU"
-        if !identifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' || c == '@') {
-            return Err("Entity identifier should contain only letters, numbers, underscore, dot, dash, or @ symbol".to_string());
+        if !identifier
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' || c == '@')
+        {
+            return Err(
+                "Entity identifier should contain only letters, numbers, underscore, dot, dash, \
+                 or @ symbol"
+                    .to_string(),
+            );
         }
 
         Ok(())
@@ -418,7 +464,7 @@ impl RequestValidator {
     }
 }
 
-impl Default for RequestValidator {
+impl Default for Validator {
     fn default() -> Self {
         Self::new()
     }
@@ -426,10 +472,12 @@ impl Default for RequestValidator {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use capsula_key::Curve25519;
+
     use super::*;
     use crate::ra::{create_csr, CsrSubject};
-    use capsula_key::Curve25519;
-    use std::collections::HashSet;
 
     fn create_test_csr() -> Result<Csr> {
         let key = Curve25519::generate().unwrap();
@@ -441,15 +489,15 @@ mod tests {
             state: Some("CA".to_string()),
             locality: Some("San Francisco".to_string()),
         };
-        
+
         create_csr(&key, subject)
     }
 
     #[test]
     fn test_default_validator() {
-        let validator = RequestValidator::new();
+        let validator = Validator::new();
         let policy = validator.get_policy();
-        
+
         assert_eq!(policy.min_key_size, 2048);
         assert!(policy.allowed_algorithms.contains("Ed25519"));
         assert!(policy.allowed_algorithms.contains("RSA"));
@@ -462,7 +510,7 @@ mod tests {
     fn test_custom_policy() {
         let mut allowed_algorithms = HashSet::new();
         allowed_algorithms.insert("Ed25519".to_string());
-        
+
         let policy = ValidationPolicy {
             min_key_size: 4096,
             allowed_algorithms,
@@ -477,18 +525,18 @@ mod tests {
             validate_key_usage: false,
         };
 
-        let validator = RequestValidator::with_policy(policy);
+        let validator = Validator::with_policy(policy);
         assert_eq!(validator.get_policy().min_key_size, 4096);
         assert_eq!(validator.get_policy().max_validity_days, 90);
     }
 
     #[test]
     fn test_csr_validation_valid() {
-        let validator = RequestValidator::new();
+        let validator = Validator::new();
         let csr = create_test_csr().expect("Failed to create test CSR");
-        
+
         let result = validator.validate_csr(&csr).expect("Validation failed");
-        
+
         // 应该通过验证，因为使用了默认的宽松策略
         assert!(result.is_valid);
         assert!(result.score > 50); // 应该有较高的分数
@@ -499,12 +547,12 @@ mod tests {
     fn test_csr_validation_missing_cn() {
         let mut policy = ValidationPolicy::default();
         policy.require_common_name = true;
-        let validator = RequestValidator::with_policy(policy);
-        
+        let validator = Validator::with_policy(policy);
+
         // 创建一个没有 CN 的 CSR（在当前实现中，get_subject_info 总是返回 "temp-subject"）
         let csr = create_test_csr().expect("Failed to create test CSR");
         let result = validator.validate_csr(&csr).expect("Validation failed");
-        
+
         // 由于 get_subject_info 返回的是固定值，这个测试会通过
         // TODO: 当实现真正的主题信息解析后，需要更新这个测试
         assert!(!result.get_errors().is_empty() || result.is_valid);
@@ -515,12 +563,14 @@ mod tests {
         let mut policy = ValidationPolicy::default();
         // 只允许Authority类型
         policy.allowed_entity_types.clear();
-        policy.allowed_entity_types.insert(DataCapsuleEntityType::Authority);
-        let validator = RequestValidator::with_policy(policy);
-        
+        policy
+            .allowed_entity_types
+            .insert(DataCapsuleEntityType::Authority);
+        let validator = Validator::with_policy(policy);
+
         let csr = create_test_csr().expect("Failed to create test CSR");
         let result = validator.validate_csr(&csr).expect("Validation failed");
-        
+
         // 由于我们的测试CSR应该通过基本验证
         assert!(result.is_valid);
     }
@@ -529,11 +579,11 @@ mod tests {
     fn test_organization_requirement() {
         let mut policy = ValidationPolicy::default();
         policy.require_organization = true;
-        let validator = RequestValidator::with_policy(policy);
-        
+        let validator = Validator::with_policy(policy);
+
         let csr = create_test_csr().expect("Failed to create test CSR");
         let result = validator.validate_csr(&csr).expect("Validation failed");
-        
+
         // 测试CSR包含组织信息，应该通过
         // TODO: 当实现真正的主题信息解析后，需要更新这个测试
         assert!(result.is_valid || !result.get_errors().is_empty());
@@ -562,7 +612,7 @@ mod tests {
             },
         ];
 
-        let result = ValidationResult {
+        let result = ValidationOutcome {
             is_valid: false,
             issues,
             score: 60,
@@ -580,12 +630,12 @@ mod tests {
 
     #[test]
     fn test_common_name_validation() {
-        let validator = RequestValidator::new();
-        
+        let validator = Validator::new();
+
         // 测试有效的 Common Name
         assert!(validator.validate_common_name("AUTHORITY_001").is_ok());
         assert!(validator.validate_common_name("test-server").is_ok());
-        
+
         // 测试无效的 Common Name
         assert!(validator.validate_common_name("").is_err()); // 空字符串不允许
         assert!(validator.validate_common_name(&"x".repeat(129)).is_err()); // 太长（128字符限制）
@@ -595,29 +645,29 @@ mod tests {
 
     #[test]
     fn test_trust_level_calculation() {
-        let validator = RequestValidator::new();
-        
+        let validator = Validator::new();
+
         // 测试不同严重级别对信任等级的影响
-        let mut issues = vec![
-            ValidationIssue {
-                severity: ValidationSeverity::Critical,
-                message: "Critical issue".to_string(),
-                code: "CRITICAL".to_string(),
-                field: None,
-            },
-        ];
-        
+        let mut issues = vec![ValidationIssue {
+            severity: ValidationSeverity::Critical,
+            message: "Critical issue".to_string(),
+            code: "CRITICAL".to_string(),
+            field: None,
+        }];
+
         let trust_level = validator.calculate_trust_level(100, &issues);
         assert!(trust_level <= 60); // 100 - 40 (Critical) = 60
-        
+
         issues.push(ValidationIssue {
             severity: ValidationSeverity::Error,
             message: "Error issue".to_string(),
             code: "ERROR".to_string(),
             field: None,
         });
-        
+
         let trust_level = validator.calculate_trust_level(100, &issues);
         assert!(trust_level <= 40); // 100 - 40 (Critical) - 20 (Error) = 40
     }
 }
+
+// 重新导出为旧名称以保持向后兼容
