@@ -11,6 +11,6 @@
 //! - `capsula_cli` - 命令行工具
 
 // Re-export all sub-crates
-pub use capsula_api;
+
 pub use capsula_core;
 pub use capsula_pki;

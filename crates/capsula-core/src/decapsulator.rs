@@ -4,11 +4,13 @@
 
 use base64::{engine::general_purpose, Engine as _};
 use capsula_crypto::{sha256, symmetric::aes::Aes, verify_signature};
-use capsula_key::{RsaKey, P256Key, Curve25519};
+use capsula_key::{Curve25519, P256Key, RsaKey};
 use time::OffsetDateTime;
 
-use crate::error::{CoreError, Result};
-use crate::protocol::capsule::*;
+use crate::{
+    error::{CoreError, Result},
+    protocol::capsule::*,
+};
 
 /// 解包结果
 pub struct DecapsulationResult {
@@ -46,13 +48,15 @@ impl PrivateKeyWrapper {
             (PrivateKeyWrapper::Rsa(_key), "RSA-OAEP") => {
                 // 这里需要实现RSA私钥解密功能
                 // TODO: 实现RSA私钥解密功能
-                Err(CoreError::DecapsulationError("RSA decryption not implemented yet".to_string()))
+                Err(CoreError::DecapsulationError(
+                    "RSA decryption not implemented yet".to_string(),
+                ))
             }
             _ => Err(CoreError::DecapsulationError(format!(
-                "Unsupported key type or algorithm: {:?}/{}", 
-                self.key_type(), 
+                "Unsupported key type or algorithm: {:?}/{}",
+                self.key_type(),
                 algorithm
-            )))
+            ))),
         }
     }
 
@@ -156,7 +160,9 @@ impl CapsuleDecryptor {
 
         // 检查必要字段
         if capsule.header.id.is_empty() || capsule.meta.producer.is_empty() {
-            return Err(CoreError::FormatError("Missing required fields".to_string()));
+            return Err(CoreError::FormatError(
+                "Missing required fields".to_string(),
+            ));
         }
 
         // 检查载荷
@@ -172,10 +178,11 @@ impl CapsuleDecryptor {
         if let Some(producer_pub_key) = &self.producer_public_key {
             // 重构签名数据
             let sign_data = self.create_signature_data(capsule)?;
-            
+
             // 解码签名
-            let signature_bytes = general_purpose::STANDARD.decode(&capsule.integrity.signature.sig)?;
-            
+            let signature_bytes =
+                general_purpose::STANDARD.decode(&capsule.integrity.signature.sig)?;
+
             // 验证签名
             let valid = verify_signature(producer_pub_key, &sign_data, &signature_bytes)?;
             Ok(valid)
@@ -215,7 +222,10 @@ impl CapsuleDecryptor {
     /// 验证时间限制
     fn validate_time(&self, capsule: &Capsula1) -> Result<bool> {
         if let Some(expires_at_str) = &capsule.meta.expires_at {
-            let expires_at = OffsetDateTime::parse(expires_at_str, &time::format_description::well_known::Rfc3339)?;
+            let expires_at = OffsetDateTime::parse(
+                expires_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )?;
             let now = OffsetDateTime::now_utc();
             Ok(now <= expires_at)
         } else {
@@ -230,14 +240,16 @@ impl CapsuleDecryptor {
             if keywrap.kid == self.user_id {
                 // 解码包装的CEK
                 let wrapped_cek = general_purpose::STANDARD.decode(&keywrap.cek_wrapped)?;
-                
+
                 // 使用私钥解密CEK
                 let cek = self.unwrap_cek(&wrapped_cek, &keywrap.alg)?;
                 return Ok(cek);
             }
         }
 
-        Err(CoreError::DecapsulationError("No suitable key found in keyring".to_string()))
+        Err(CoreError::DecapsulationError(
+            "No suitable key found in keyring".to_string(),
+        ))
     }
 
     /// 解包CEK
@@ -249,17 +261,19 @@ impl CapsuleDecryptor {
     fn decrypt_payload(&self, capsule: &Capsula1, cek: &[u8]) -> Result<Vec<u8>> {
         // 解码密文
         let ciphertext = general_purpose::STANDARD.decode(&capsule.payload.ct)?;
-        
+
         // 使用CEK解密
         if cek.len() == 32 {
             let mut cek_array = [0u8; 32];
             cek_array.copy_from_slice(cek);
-            
+
             let aes = Aes::new(&cek_array)?;
             let plaintext = aes.decrypt(&ciphertext)?;
             Ok(plaintext)
         } else {
-            Err(CoreError::DecapsulationError("Invalid CEK length".to_string()))
+            Err(CoreError::DecapsulationError(
+                "Invalid CEK length".to_string(),
+            ))
         }
     }
 
@@ -268,7 +282,7 @@ impl CapsuleDecryptor {
         // 重新计算摘要
         let computed_hash = sha256(decrypted_data);
         let computed_hash_str = general_purpose::STANDARD.encode(computed_hash);
-        
+
         // 与存储的摘要比较
         Ok(computed_hash_str == capsule.meta.digest.hash)
     }
@@ -276,9 +290,10 @@ impl CapsuleDecryptor {
     /// 创建审计事件
     fn create_audit_event(&self, capsule: &Capsula1) -> Result<AuditEvent> {
         let now = OffsetDateTime::now_utc();
-        
+
         Ok(AuditEvent {
-            ts: now.format(&time::format_description::well_known::Rfc3339)
+            ts: now
+                .format(&time::format_description::well_known::Rfc3339)
                 .map_err(|e| CoreError::Other(format!("Time format error: {}", e)))?,
             actor: self.user_id.clone(),
             action: "decrypt".to_string(),
@@ -302,15 +317,17 @@ impl CapsuleDecryptor {
             "policy": capsule.policy
         });
 
-        serde_json::to_vec(&sign_structure)
-            .map_err(|e| CoreError::DecapsulationError(format!("Signature data creation failed: {}", e)))
+        serde_json::to_vec(&sign_structure).map_err(|e| {
+            CoreError::DecapsulationError(format!("Signature data creation failed: {}", e))
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use capsula_key::RsaKey;
+
+    use super::*;
 
     #[test]
     fn test_structure_validation() {
@@ -319,7 +336,7 @@ mod tests {
 
         // 创建一个基本的胶囊用于测试
         let capsule = create_test_capsule();
-        
+
         assert!(decryptor.validate_structure(&capsule).is_ok());
     }
 
@@ -327,32 +344,42 @@ mod tests {
     fn test_time_validation() {
         let rsa_key = RsaKey::generate_2048().unwrap();
         let decryptor = CapsuleDecryptor::new_rsa(rsa_key, "test_user".to_string());
-        
+
         let mut capsule = create_test_capsule();
-        
+
         // 设置未来的过期时间
         let future_time = OffsetDateTime::now_utc() + time::Duration::hours(1);
-        capsule.meta.expires_at = Some(future_time.format(&time::format_description::well_known::Rfc3339).unwrap());
-        
+        capsule.meta.expires_at = Some(
+            future_time
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
+        );
+
         assert!(decryptor.validate_time(&capsule).unwrap());
-        
+
         // 设置过去的过期时间
         let past_time = OffsetDateTime::now_utc() - time::Duration::hours(1);
-        capsule.meta.expires_at = Some(past_time.format(&time::format_description::well_known::Rfc3339).unwrap());
-        
+        capsule.meta.expires_at = Some(
+            past_time
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
+        );
+
         assert!(!decryptor.validate_time(&capsule).unwrap());
     }
 
     fn create_test_capsule() -> Capsula1 {
-        use crate::protocol::types::{CapsulaStage, CapsulaGranted};
-        
+        use crate::protocol::types::{CapsulaGranted, CapsulaStage};
+
         Capsula1 {
             header: Header {
                 ver: "1.0".to_string(),
                 stage: CapsulaStage::First,
                 type_: "test".to_string(),
                 id: "cid:test123".to_string(),
-                created_at: OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap(),
+                created_at: OffsetDateTime::now_utc()
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap(),
             },
             meta: Meta {
                 producer: "test_producer".to_string(),
@@ -387,4 +414,3 @@ mod tests {
         }
     }
 }
-

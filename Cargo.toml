@@ -10,7 +10,6 @@ description = "数据胶囊 - 安全的数据封装和管理系统"
 [dependencies]
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
-capsula-api = { path = "crates/capsula-api" }
 capsula-key = { path = "crates/capsula-key" }
 capsula-crypto = { path = "crates/capsula-crypto" }
 
@@ -52,7 +51,6 @@ repository = "https://github.com/ancient/capsula"
 capsula-crypto = { path = "crates/capsula-crypto" }
 capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
-capsula-api = { path = "crates/capsula-api" }
 capsula-key = { path = "crates/capsula-key" }
 capsula-ffi = { path = "crates/capsula-ffi" }
 

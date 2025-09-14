@@ -266,4 +266,35 @@ mod tests {
 
         assert!(verification_result.is_ok());
     }
+
+    #[test]
+    fn test_round_trip_encapsulation_decapsulation() {
+        let data = b"Secret medical data for testing!".to_vec();
+        let producer_key = RsaKey::generate_2048().unwrap();
+        let recipient_key = RsaKey::generate_2048().unwrap();
+        
+        let recipients = vec![("doctor123".to_string(), &recipient_key as &dyn Key)];
+
+        // 1. Encapsulate
+        let capsule = CapsulaApi::encapsulate_simple(
+            data.clone(),
+            "medical.blood_test".to_string(),
+            "Central Hospital".to_string(),
+            "Patient 001".to_string(),
+            &producer_key,
+            &recipients,
+        ).unwrap();
+
+        // 2. Decapsulate
+        let result = CapsulaApi::decapsulate_simple_rsa(
+            &capsule,
+            recipient_key,
+            "doctor123".to_string(),
+            None, // No producer public key for now
+        ).unwrap();
+
+        // 3. Verify
+        assert_eq!(result.data, data);
+        println!("✅ Round trip test successful! Original data matches decrypted data");
+    }
 }
