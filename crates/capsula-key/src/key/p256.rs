@@ -119,6 +119,10 @@ impl Key for P256Key {
     fn capabilities(&self) -> KeyCapabilities {
         KeyCapabilities::SIGNING.union(KeyCapabilities::KEY_AGREEMENT)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 // ============================================================================

@@ -201,6 +201,10 @@ impl Key for Curve25519 {
     fn capabilities(&self) -> KeyCapabilities {
         KeyCapabilities::SIGNING.union(KeyCapabilities::KEY_AGREEMENT)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl KeySign for Curve25519 {

@@ -116,6 +116,10 @@ impl Key for RsaKey {
     fn capabilities(&self) -> KeyCapabilities {
         KeyCapabilities::SIGNING.union(KeyCapabilities::ENCRYPTION)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 // ============================================================================

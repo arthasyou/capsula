@@ -53,6 +53,9 @@ pub trait Key: Send + Sync {
     fn fingerprint_hex(&self) -> String {
         hex::encode(self.fingerprint_sha256_spki())
     }
+
+    /// 获取Any trait object引用，用于安全的向下转换
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 // ============================================================================

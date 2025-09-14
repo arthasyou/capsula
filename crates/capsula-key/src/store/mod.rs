@@ -1,21 +1,16 @@
+mod enhanced;
 mod file;
 mod hsm;
 mod memory;
 
+pub use enhanced::{EnhancedKeyStore, EnhancedKeyMetadata, KeyUsage, KeyValidity, BackupStatus};
 pub use file::FileKeyStore;
 pub use hsm::HsmKeyStore;
 pub use memory::MemoryKeyStore;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-
-// Move types here since they're only used by store
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Algorithm {
-    Ed25519,
-    X25519,
-    P256,
-}
+use crate::key::Algorithm;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct KeyHandle(pub u64);
