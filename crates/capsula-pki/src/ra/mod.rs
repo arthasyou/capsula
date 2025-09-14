@@ -9,7 +9,6 @@ pub mod approval_workflow;
 pub mod cert;
 pub mod csr;
 pub mod identity_auth;
-pub mod request_handler;
 pub mod validation;
 
 // 重新导出CSR和证书相关类型
@@ -19,7 +18,13 @@ pub use cert::{
     X509Certificate,
 };
 pub use csr::{build_unsigned, create_csr, CertReqInfo, Csr, CsrSubject, PublicKeyInfo};
-pub use validation::{RequestValidator, ValidationPolicy, ValidationResult, ValidationSeverity, ValidationIssue};
+pub use identity_auth::{
+    AuthResult, IdentityAuth, IdentityContext, IdentityType, TrustEvaluator,
+    TrustPolicy as IdentityTrustPolicy, VerificationCredential, VerificationMethod,
+};
+pub use validation::{
+    RequestValidator, ValidationIssue, ValidationPolicy, ValidationResult, ValidationSeverity,
+};
 
 use crate::error::Result;
 

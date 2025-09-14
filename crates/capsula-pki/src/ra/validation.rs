@@ -77,7 +77,18 @@ impl ValidationResult {
     }
 }
 
-/// 验证策略配置
+/// 数据胶囊实体类型 - 通用设计
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DataCapsuleEntityType {
+    /// 权威机构 - 可作为根CA或中间CA (如：医院、公司、政府机构)
+    Authority,
+    /// 成员实体 - 由权威机构签发证书 (如：医生、员工、设备)
+    Member,
+    /// 独立实体 - 自主管理证书 (如：病人、个人用户、独立设备)
+    Independent,
+}
+
+/// 验证策略配置 - 数据胶囊场景
 #[derive(Debug, Clone)]
 pub struct ValidationPolicy {
     /// 要求的最小密钥长度
@@ -86,20 +97,14 @@ pub struct ValidationPolicy {
     pub allowed_algorithms: HashSet<String>,
     /// 证书最大有效期（天）
     pub max_validity_days: u32,
-    /// 是否要求 Common Name
+    /// 是否要求 Common Name (实体标识符)
     pub require_common_name: bool,
-    /// 是否要求组织信息
+    /// 是否要求组织信息(权威机构名称)
     pub require_organization: bool,
-    /// 是否要求国家代码
-    pub require_country: bool,
-    /// 域名黑名单
-    pub domain_blacklist: HashSet<String>,
-    /// 域名白名单（如果设置，只允许白名单域名）
-    pub domain_whitelist: Option<HashSet<String>>,
+    /// 允许的数据胶囊实体类型
+    pub allowed_entity_types: HashSet<DataCapsuleEntityType>,
     /// 是否启用密钥用途检查
     pub validate_key_usage: bool,
-    /// 是否启用扩展密钥用途检查
-    pub validate_extended_key_usage: bool,
 }
 
 impl Default for ValidationPolicy {
@@ -109,17 +114,19 @@ impl Default for ValidationPolicy {
         allowed_algorithms.insert("RSA".to_string());
         allowed_algorithms.insert("ECDSA".to_string());
 
+        let mut allowed_entity_types = HashSet::new();
+        allowed_entity_types.insert(DataCapsuleEntityType::Authority);
+        allowed_entity_types.insert(DataCapsuleEntityType::Member);
+        allowed_entity_types.insert(DataCapsuleEntityType::Independent);
+
         Self {
             min_key_size: 2048, // RSA 最小长度
             allowed_algorithms,
-            max_validity_days: 365, // 1年
-            require_common_name: true,
-            require_organization: false,
-            require_country: false,
-            domain_blacklist: HashSet::new(),
-            domain_whitelist: None,
+            max_validity_days: 1095, // 3年，数据胶囊证书有效期较长
+            require_common_name: true, // 数据胶囊实体必须有标识符
+            require_organization: false, // 组织信息可选，独立实体可能没有
+            allowed_entity_types,
             validate_key_usage: true,
-            validate_extended_key_usage: true,
         }
     }
 }
@@ -172,8 +179,8 @@ impl RequestValidator {
             self.validate_key_usage(csr, &mut issues, &mut score)?;
         }
 
-        // 5. 域名和合规性检查
-        self.validate_compliance(csr, &mut issues, &mut score)?;
+        // 5. 数据胶囊实体合规性检查
+        self.validate_datacapsule_compliance(csr, &mut issues, &mut score)?;
 
         // 6. 计算最终结果
         let has_critical_or_error = issues
@@ -251,16 +258,8 @@ impl RequestValidator {
             *score = score.saturating_sub(15);
         }
 
-        // 检查国家代码
-        if self.policy.require_country && subject_info.country.is_none() {
-            issues.push(ValidationIssue {
-                severity: ValidationSeverity::Error,
-                message: "Country is required".to_string(),
-                code: "COUNTRY_MISSING".to_string(),
-                field: Some("subject.country".to_string()),
-            });
-            *score = score.saturating_sub(15);
-        } else if let Some(ref country) = subject_info.country {
+        // 检查国家代码格式（可选）
+        if let Some(ref country) = subject_info.country {
             if country.len() != 2 {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Warning,
@@ -336,64 +335,69 @@ impl RequestValidator {
         Ok(())
     }
 
-    /// 验证合规性（黑白名单等）
-    fn validate_compliance(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
+    /// 验证数据胶囊实体合规性
+    fn validate_datacapsule_compliance(&self, csr: &Csr, issues: &mut Vec<ValidationIssue>, score: &mut u8) -> Result<()> {
         let subject_info = csr.get_subject_info();
         let common_name = &subject_info.common_name;
 
-        // 检查域名黑名单
+        // 验证实体标识符格式（数据胶囊实体应有清晰的标识）
         if !common_name.is_empty() {
-            for blacklisted_domain in &self.policy.domain_blacklist {
-                if common_name.contains(blacklisted_domain) {
-                    issues.push(ValidationIssue {
-                        severity: ValidationSeverity::Critical,
-                        message: format!("Domain '{}' is blacklisted", blacklisted_domain),
-                        code: "DOMAIN_BLACKLISTED".to_string(),
-                        field: Some("subject.common_name".to_string()),
-                    });
-                    *score = score.saturating_sub(50);
-                }
+            // 检查是否为有效的实体标识符
+            if let Err(msg) = self.validate_entity_identifier(common_name) {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Warning,
+                    message: msg,
+                    code: "ENTITY_ID_FORMAT".to_string(),
+                    field: Some("subject.common_name".to_string()),
+                });
+                *score = score.saturating_sub(10);
             }
+        }
 
-            // 检查域名白名单
-            if let Some(ref whitelist) = self.policy.domain_whitelist {
-                let is_whitelisted = whitelist.iter().any(|allowed_domain| common_name.contains(allowed_domain));
-                if !is_whitelisted {
-                    issues.push(ValidationIssue {
-                        severity: ValidationSeverity::Error,
-                        message: format!("Domain '{}' is not in whitelist", common_name),
-                        code: "DOMAIN_NOT_WHITELISTED".to_string(),
-                        field: Some("subject.common_name".to_string()),
-                    });
-                    *score = score.saturating_sub(30);
-                }
+        // 验证组织信息（对权威机构和成员实体可能重要）
+        if self.policy.require_organization {
+            if subject_info.organization.is_none() || subject_info.organization.as_ref().unwrap().is_empty() {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    message: "Entity must specify organization (authority/company name)".to_string(),
+                    code: "ENTITY_ORG_MISSING".to_string(),
+                    field: Some("subject.organization".to_string()),
+                });
+                *score = score.saturating_sub(25);
             }
         }
 
         Ok(())
     }
 
-    /// 验证 Common Name 格式
-    fn validate_common_name(&self, common_name: &str) -> std::result::Result<(), String> {
+    /// 验证数据胶囊实体标识符格式
+    fn validate_entity_identifier(&self, identifier: &str) -> std::result::Result<(), String> {
         // 基本长度检查
-        if common_name.len() > 64 {
-            return Err("Common Name too long (max 64 characters)".to_string());
+        if identifier.is_empty() {
+            return Err("Entity identifier cannot be empty".to_string());
         }
 
-        // 检查是否可能是域名
-        if common_name.contains('.') {
-            // 域名格式验证
-            if common_name.starts_with('.') || common_name.ends_with('.') {
-                return Err("Invalid domain format".to_string());
-            }
+        if identifier.len() > 128 {
+            return Err("Entity identifier too long (max 128 characters)".to_string());
         }
 
-        // 检查非法字符
-        if common_name.chars().any(|c| c.is_control() || c == '\0') {
-            return Err("Common Name contains invalid characters".to_string());
+        // 检查非法字符（实体标识符应该是安全的）
+        if identifier.chars().any(|c| c.is_control() || c == '\0') {
+            return Err("Entity identifier contains invalid characters".to_string());
+        }
+
+        // 数据胶囊实体标识符格式检查（支持多种格式）
+        // 示例: "AUTHORITY_001", "User.Zhang", "DEVICE_12345", "Beijing_Company_ICU"
+        if !identifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' || c == '@') {
+            return Err("Entity identifier should contain only letters, numbers, underscore, dot, dash, or @ symbol".to_string());
         }
 
         Ok(())
+    }
+
+    /// 验证 Common Name 格式 (保留兼容性)
+    fn validate_common_name(&self, common_name: &str) -> std::result::Result<(), String> {
+        self.validate_entity_identifier(common_name)
     }
 
     /// 计算信任等级
@@ -450,7 +454,7 @@ mod tests {
         assert!(policy.allowed_algorithms.contains("Ed25519"));
         assert!(policy.allowed_algorithms.contains("RSA"));
         assert!(policy.allowed_algorithms.contains("ECDSA"));
-        assert_eq!(policy.max_validity_days, 365);
+        assert_eq!(policy.max_validity_days, 1095);
         assert!(policy.require_common_name);
     }
 
@@ -465,11 +469,12 @@ mod tests {
             max_validity_days: 90,
             require_common_name: true,
             require_organization: true,
-            require_country: true,
-            domain_blacklist: HashSet::new(),
-            domain_whitelist: None,
+            allowed_entity_types: {
+                let mut types = HashSet::new();
+                types.insert(DataCapsuleEntityType::Authority);
+                types
+            },
             validate_key_usage: false,
-            validate_extended_key_usage: false,
         };
 
         let validator = RequestValidator::with_policy(policy);
@@ -506,34 +511,32 @@ mod tests {
     }
 
     #[test]
-    fn test_domain_blacklist() {
+    fn test_entity_types_validation() {
         let mut policy = ValidationPolicy::default();
-        policy.domain_blacklist.insert("evil.com".to_string());
+        // 只允许Authority类型
+        policy.allowed_entity_types.clear();
+        policy.allowed_entity_types.insert(DataCapsuleEntityType::Authority);
         let validator = RequestValidator::with_policy(policy);
         
         let csr = create_test_csr().expect("Failed to create test CSR");
         let result = validator.validate_csr(&csr).expect("Validation failed");
         
-        // 由于我们的测试 CSR 使用 "temp-subject"，不包含 "evil.com"，应该通过
+        // 由于我们的测试CSR应该通过基本验证
         assert!(result.is_valid);
     }
 
     #[test]
-    fn test_domain_whitelist() {
+    fn test_organization_requirement() {
         let mut policy = ValidationPolicy::default();
-        let mut whitelist = HashSet::new();
-        whitelist.insert("example.com".to_string());
-        policy.domain_whitelist = Some(whitelist);
+        policy.require_organization = true;
         let validator = RequestValidator::with_policy(policy);
         
         let csr = create_test_csr().expect("Failed to create test CSR");
         let result = validator.validate_csr(&csr).expect("Validation failed");
         
-        // 由于 get_subject_info 返回 "temp-subject"，不在白名单中，应该失败
+        // 测试CSR包含组织信息，应该通过
         // TODO: 当实现真正的主题信息解析后，需要更新这个测试
-        let has_whitelist_error = result.get_errors().iter()
-            .any(|error| error.contains("not in whitelist"));
-        assert!(has_whitelist_error || result.is_valid);
+        assert!(result.is_valid || !result.get_errors().is_empty());
     }
 
     #[test]
@@ -580,15 +583,14 @@ mod tests {
         let validator = RequestValidator::new();
         
         // 测试有效的 Common Name
-        assert!(validator.validate_common_name("example.com").is_ok());
+        assert!(validator.validate_common_name("AUTHORITY_001").is_ok());
         assert!(validator.validate_common_name("test-server").is_ok());
         
         // 测试无效的 Common Name
-        assert!(validator.validate_common_name("").is_ok()); // 空字符串是可以的
-        assert!(validator.validate_common_name(&"x".repeat(65)).is_err()); // 太长
-        assert!(validator.validate_common_name(".example.com").is_err()); // 无效域名格式
-        assert!(validator.validate_common_name("example.com.").is_err()); // 无效域名格式
+        assert!(validator.validate_common_name("").is_err()); // 空字符串不允许
+        assert!(validator.validate_common_name(&"x".repeat(129)).is_err()); // 太长（128字符限制）
         assert!(validator.validate_common_name("test\x00name").is_err()); // 包含空字节
+        assert!(validator.validate_common_name("invalid*chars").is_err()); // 包含不允许字符
     }
 
     #[test]

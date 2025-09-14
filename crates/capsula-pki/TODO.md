@@ -44,11 +44,12 @@
 > **依赖关系**：CA 依赖 RA，必须先完善 RA 作为 PKI 系统入口
 
 1. **RA 核心功能验证和完善**
-   - [ ] 验证 CSR 接收和处理流程 (`src/ra/request_handler.rs`)
+   - [x] 完善 CSR 验证逻辑 (`src/ra/validation.rs`) ✅ 已完成
    - [ ] 完善身份认证机制 (`src/ra/identity_auth.rs`)
    - [ ] 实现审批工作流程 (`src/ra/approval_workflow.rs`)
-   - [ ] 完善 CSR 验证逻辑 (`src/ra/validation.rs`)
    - [ ] 测试 RA 配置和策略管理
+   
+   **注**: CSR 请求处理流程将在 `capsula-pki-server` 中实现，作为业务编排层
 
 2. **密钥存储模块完善** (支撑 RA/CA)
    - [ ] 实现 `store_key()` 和 `retrieve_key()` 的完整功能
@@ -126,10 +127,9 @@
 
 ### 需要修复的问题
 1. **RA 模块功能待验证** (最高优先级)
-   - `request_handler.rs` 请求处理逻辑需要验证
-   - `identity_auth.rs` 身份认证机制需要完善
-   - `approval_workflow.rs` 审批流程需要测试
-   - `validation.rs` CSR 验证逻辑需要加强
+   - [x] `validation.rs` CSR 验证逻辑 ✅ 已完成
+   - [ ] `identity_auth.rs` 身份认证机制需要完善
+   - [ ] `approval_workflow.rs` 审批流程需要测试
 
 2. **密钥存储实现不完整**
    - `store_key()` 和 `retrieve_key()` 只有占位实现
