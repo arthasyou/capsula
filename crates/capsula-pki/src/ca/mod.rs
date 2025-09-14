@@ -1,265 +1,301 @@
-use capsula_key::{Curve25519, Key};
-use serde::{Deserialize, Serialize};
-use time::{Duration, OffsetDateTime};
+//! CA (Certificate Authority) 模块
+//!
+//! 提供完整的证书颁发机构功能，包括：
+//! - CA创建和管理 (根CA、中间CA)
+//! - 证书签发流程
+//! - 证书链构建和验证
+//! - CA配置管理
 
-use crate::{
-    error::{PkiError, Result as PkiResult},
-    ra::cert::{
-        create_certificate, create_self_signed_certificate, export_certificate, sign_certificate,
-        CertificateInfo, CertificateSubject, X509Certificate,
-    },
-};
+pub mod authority;
+pub mod chain;
+pub mod config;
+pub mod manager;
 
-/// CA 配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CAConfig {
-    /// CA 名称
-    pub name: String,
-    /// 国家
-    pub country: String,
-    /// 省/州
-    pub state: String,
-    /// 城市
-    pub locality: String,
-    /// 组织
-    pub organization: String,
-    /// 组织单位
-    pub organizational_unit: Option<String>,
-    /// 邮箱
-    pub email: Option<String>,
-    /// 证书有效期（天）
-    pub validity_days: u32,
-    /// 默认证书有效期（天）
-    pub default_cert_validity_days: u32,
-    /// 最大证书链深度
-    pub max_path_length: Option<u8>,
+// 重新导出主要类型
+pub use authority::{Authority, CAType};
+pub use chain::{Chain, ChainBuilder, ValidationResult as ChainValidationResult, ValidationIssue};
+pub use config::{Config, ConfigTemplates, KeyAlgorithm};
+pub use manager::{Manager, CAInfo, IssuanceRequest, IssuanceResult, ManagerStatistics};
+
+// 向后兼容的类型别名
+pub use config::Config as CAConfig;
+pub use manager::Manager as CAManager;
+
+/// CA模块的Result类型
+pub type Result<T> = crate::error::Result<T>;
+
+/// CA工厂 - 便捷的CA创建接口
+pub struct CAFactory;
+
+impl CAFactory {
+    /// 快速创建测试环境的CA管理器
+    pub fn create_test_environment() -> Result<Manager> {
+        let mut manager = Manager::new();
+        
+        // 创建测试根CA
+        let root_config = ConfigTemplates::test_root();
+        manager.create_root_ca("test-root-ca".to_string(), root_config)?;
+        
+        // 创建TLS服务器中间CA
+        let tls_config = ConfigTemplates::tls_server();
+        manager.create_intermediate_ca(
+            "test-root-ca",
+            "tls-server-ca".to_string(),
+            tls_config,
+        )?;
+        
+        Ok(manager)
+    }
+
+    /// 创建企业级CA环境
+    pub fn create_enterprise_environment(organization: &str) -> Result<Manager> {
+        let mut manager = Manager::new();
+        
+        // 创建企业根CA
+        let root_config = Config::root_ca("Enterprise Root CA", organization)
+            .with_validity(7300, 365) // 20年CA，1年证书
+            .with_max_path_length(Some(5));
+        
+        manager.create_root_ca("enterprise-root-ca".to_string(), root_config)?;
+        
+        // 创建各种用途的中间CA
+        let tls_config = ConfigTemplates::tls_server()
+            .with_location("US", "CA", "San Francisco");
+        manager.create_intermediate_ca(
+            "enterprise-root-ca",
+            "tls-server-ca".to_string(),
+            tls_config,
+        )?;
+        
+        let code_signing_config = ConfigTemplates::code_signing();
+        manager.create_intermediate_ca(
+            "enterprise-root-ca",
+            "code-signing-ca".to_string(),
+            code_signing_config,
+        )?;
+        
+        Ok(manager)
+    }
+
+    /// 创建单一根CA实例
+    pub fn create_simple_root_ca(name: &str, organization: &str) -> Result<Authority> {
+        let config = Config::root_ca(name, organization);
+        Authority::new_root(config)
+    }
+
+    /// 从配置模板创建CA
+    pub fn create_from_template(template_name: &str) -> Result<Authority> {
+        let config = match template_name {
+            "enterprise_root" => ConfigTemplates::enterprise_root(),
+            "test_root" => ConfigTemplates::test_root(),
+            "tls_server" => ConfigTemplates::tls_server(),
+            "code_signing" => ConfigTemplates::code_signing(),
+            "iot_device" => ConfigTemplates::iot_device(),
+            _ => return Err(crate::error::PkiError::CAError(
+                format!("Unknown template: {}", template_name)
+            )),
+        };
+        
+        Authority::new_root(config)
+    }
 }
 
-impl Default for CAConfig {
-    fn default() -> Self {
-        Self {
-            name: "Root CA".to_string(),
-            country: "CN".to_string(),
-            state: "Shanghai".to_string(),
-            locality: "Shanghai".to_string(),
-            organization: "Medical PKI".to_string(),
-            organizational_unit: Some("Certificate Authority".to_string()),
-            email: None,
-            validity_days: 3650,             // 10年
-            default_cert_validity_days: 365, // 1年
-            max_path_length: Some(2),
+/// CA模块统一错误处理
+pub mod error {
+    pub use crate::error::PkiError as CAError;
+    pub use crate::error::Result as CAResult;
+}
+
+/// CA模块工具函数
+pub mod utils {
+    use super::*;
+
+    /// 验证CA配置的兼容性
+    pub fn validate_ca_hierarchy(parent_config: &Config, child_config: &Config) -> Result<()> {
+        // 检查有效期
+        if child_config.validity_days >= parent_config.validity_days {
+            return Err(crate::error::PkiError::CAError(
+                "Child CA validity period must be shorter than parent CA".to_string()
+            ));
+        }
+
+        // 检查证书链长度限制
+        if let (Some(parent_max), Some(child_max)) = (
+            parent_config.max_path_length,
+            child_config.max_path_length,
+        ) {
+            if child_max >= parent_max {
+                return Err(crate::error::PkiError::CAError(
+                    "Child CA max path length must be less than parent CA".to_string()
+                ));
+            }
+        }
+
+        // 检查组织信息一致性
+        if parent_config.organization != child_config.organization {
+            // 这是警告，不是错误，但可以记录
+        }
+
+        Ok(())
+    }
+
+    /// 计算CA的推荐有效期
+    pub fn calculate_recommended_validity(ca_level: u8) -> u32 {
+        match ca_level {
+            0 => 7300,  // 根CA: 20年
+            1 => 3650,  // 一级中间CA: 10年
+            2 => 1825,  // 二级中间CA: 5年
+            3 => 730,   // 三级中间CA: 2年
+            _ => 365,   // 更深层级: 1年
         }
     }
-}
 
-/// 证书颁发机构
-pub struct CertificateAuthority {
-    /// CA 密钥对
-    keypair: Curve25519,
-    /// CA 证书
-    certificate: X509Certificate,
-    /// CA 配置
-    config: CAConfig,
-    /// 已签发证书计数
-    issued_count: u64,
-}
-
-impl CertificateAuthority {
-    /// 创建新的根CA
-    pub fn new_root_ca(config: CAConfig) -> PkiResult<Self> {
-        // 生成密钥对
-        let keypair = Curve25519::generate()
-            .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
-
-        // 创建CA证书主体
-        let subject = CertificateSubject {
-            country: Some(config.country.clone()),
-            state: Some(config.state.clone()),
-            locality: Some(config.locality.clone()),
-            organization: Some(config.organization.clone()),
-            organizational_unit: config.organizational_unit.clone(),
-            common_name: config.name.clone(),
-        };
-
-        let cert_info = CertificateInfo {
-            subject: subject.clone(),
-            validity_seconds: (config.validity_days * 24 * 60 * 60) as u64,
-            serial_number: None,
-            is_ca: true,
-            key_usage: vec!["digitalSignature".to_string(), "keyCertSign".to_string()],
-        };
-
-        // 创建自签名CA证书
-        let certificate = create_self_signed_certificate(&keypair, subject, cert_info)
-            .map_err(|e| PkiError::CAError(format!("Failed to create CA certificate: {}", e)))?;
-
-        Ok(Self {
-            keypair,
-            certificate,
-            config,
-            issued_count: 0,
-        })
-    }
-
-    /// 从现有密钥和证书创建CA
-    pub fn from_existing(
-        keypair: Curve25519,
-        certificate: X509Certificate,
-        config: CAConfig,
-    ) -> PkiResult<Self> {
-        // TODO: 验证证书是CA证书
-        // if !certificate.info.is_ca {
-        //     return Err(PkiError::CAError(
-        //         "Certificate is not a CA certificate".to_string(),
-        //     ));
-        // }
-
-        // TODO: 验证证书有效期
-        // if !certificate.info.is_currently_valid() {
-        //     return Err(PkiError::CAError("CA certificate is not valid".to_string()));
-        // }
-
-        Ok(Self {
-            keypair,
-            certificate,
-            config,
-            issued_count: 0,
-        })
-    }
-
-    /// 签发证书
-    pub fn issue_certificate(
-        &mut self,
-        subject: CertificateSubject,
-        _public_key: &Curve25519,
-        _validity_days: Option<u32>,
-        _is_ca: bool,
-    ) -> PkiResult<X509Certificate> {
-        // TODO: 实现证书签发逻辑
-        // 目前返回一个占位实现
-
-        // 创建自签名证书作为临时占位
-        let cert_info = CertificateInfo {
-            subject: subject.clone(),
-            validity_seconds: 365 * 24 * 60 * 60, // 1年
-            serial_number: None,
-            is_ca: false,
-            key_usage: vec!["digitalSignature".to_string()],
-        };
-
-        let cert = create_self_signed_certificate(&self.keypair, subject, cert_info)
-            .map_err(|e| PkiError::CAError(format!("Failed to create certificate: {e}")))?;
-
-        self.issued_count += 1;
-        Ok(cert)
-    }
-
-    /// 创建中间CA
-    pub fn create_intermediate_ca(&mut self, config: CAConfig) -> PkiResult<CertificateAuthority> {
-        // 生成中间CA的密钥对
-        let intermediate_keypair = Curve25519::generate()
-            .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
-
-        // 创建中间CA的证书主体
-        let subject = CertificateSubject {
-            country: Some(config.country.clone()),
-            state: Some(config.state.clone()),
-            locality: Some(config.locality.clone()),
-            organization: Some(config.organization.clone()),
-            organizational_unit: config.organizational_unit.clone(),
-            common_name: config.name.clone(),
-        };
-
-        // 签发中间CA证书
-        let intermediate_cert = self.issue_certificate(
-            subject,
-            &intermediate_keypair,
-            Some(config.validity_days),
-            true, // 是CA证书
-        )?;
-
-        // 创建中间CA实例
-        CertificateAuthority::from_existing(intermediate_keypair, intermediate_cert, config)
-    }
-
-    /// 获取CA证书
-    pub fn certificate(&self) -> &X509Certificate {
-        &self.certificate
-    }
-
-    /// 获取CA配置
-    pub fn config(&self) -> &CAConfig {
-        &self.config
-    }
-
-    /// 获取已签发证书数量
-    pub fn issued_count(&self) -> u64 {
-        self.issued_count
-    }
-
-    /// 获取CA证书的剩余有效天数
-    pub fn days_until_expiry(&self) -> i64 {
-        // TODO: 实现有效期检查
-        365 // 临时返回
-    }
-
-    /// 导出CA证书和私钥
-    pub fn export(&self) -> PkiResult<CAExport> {
-        // TODO: 实现导出逻辑
-        let private_key_pem = b"TODO: private key export".to_vec();
-        let certificate_pem = b"TODO: certificate export".to_vec();
-
-        Ok(CAExport {
-            private_key_pem,
-            certificate_pem,
-            config: self.config.clone(),
-            issued_count: self.issued_count,
-        })
-    }
-
-    /// 从导出的数据恢复CA
-    pub fn import(export: CAExport) -> PkiResult<Self> {
-        // TODO: 实现导入逻辑
-        let keypair = Curve25519::generate()
-            .map_err(|e| PkiError::CAError(format!("Failed to generate keypair: {e}")))?;
-
-        // 创建临时证书
-        let subject = CertificateSubject {
-            common_name: "Imported CA".to_string(),
-            organization: Some("Imported".to_string()),
-            organizational_unit: None,
-            country: Some("CN".to_string()),
-            state: None,
-            locality: None,
-        };
-
-        let cert_info = CertificateInfo {
-            subject: subject.clone(),
-            validity_seconds: 365 * 24 * 60 * 60,
-            serial_number: None,
-            is_ca: true,
-            key_usage: vec!["digitalSignature".to_string(), "keyCertSign".to_string()],
-        };
-
-        let certificate = create_self_signed_certificate(&keypair, subject, cert_info)
-            .map_err(|e| PkiError::CAError(format!("Failed to create certificate: {e}")))?;
-
-        let mut ca = Self::from_existing(keypair, certificate, export.config)?;
-        ca.issued_count = export.issued_count;
-
-        Ok(ca)
+    /// 检查CA名称冲突
+    pub fn check_ca_name_conflicts(manager: &Manager, proposed_name: &str) -> bool {
+        manager.list_cas()
+            .iter()
+            .any(|ca| ca.name == proposed_name)
     }
 }
 
-/// CA导出数据
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CAExport {
-    /// 私钥PEM格式
-    pub private_key_pem: Vec<u8>,
-    /// 证书PEM格式
-    pub certificate_pem: Vec<u8>,
-    /// CA配置
-    pub config: CAConfig,
-    /// 已签发证书数量
-    pub issued_count: u64,
+/// CA批量操作支持
+pub mod batch {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// 批量CA创建配置
+    pub struct BatchCAConfig {
+        pub ca_configs: Vec<(String, Config)>,
+        pub parent_child_relationships: Vec<(String, String)>, // (parent_id, child_id)
+    }
+
+    /// 批量创建CA层次结构
+    pub fn create_ca_hierarchy(batch_config: BatchCAConfig) -> Result<Manager> {
+        let mut manager = Manager::new();
+        let mut created_cas = HashMap::new();
+
+        // 首先创建所有根CA
+        for (ca_id, config) in &batch_config.ca_configs {
+            if !batch_config.parent_child_relationships.iter().any(|(_, child)| child == ca_id) {
+                // 这是根CA
+                manager.create_root_ca(ca_id.clone(), config.clone())?;
+                created_cas.insert(ca_id.clone(), true);
+            }
+        }
+
+        // 然后按层级创建中间CA
+        let mut remaining_relationships = batch_config.parent_child_relationships;
+        while !remaining_relationships.is_empty() {
+            let mut progress_made = false;
+            
+            remaining_relationships.retain(|(parent_id, child_id)| {
+                if created_cas.contains_key(parent_id) {
+                    // 找到子CA的配置
+                    if let Some((_, config)) = batch_config.ca_configs.iter()
+                        .find(|(id, _)| id == child_id) {
+                        if manager.create_intermediate_ca(parent_id, child_id.clone(), config.clone()).is_ok() {
+                            created_cas.insert(child_id.clone(), true);
+                            progress_made = true;
+                            return false; // 移除这个关系
+                        }
+                    }
+                }
+                true // 保留这个关系
+            });
+
+            if !progress_made && !remaining_relationships.is_empty() {
+                return Err(crate::error::PkiError::CAError(
+                    "Cannot create CA hierarchy: circular dependencies or missing parents".to_string()
+                ));
+            }
+        }
+
+        Ok(manager)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ca_factory_test_environment() {
+        let result = CAFactory::create_test_environment();
+        assert!(result.is_ok());
+        
+        let manager = result.unwrap();
+        let cas = manager.list_cas();
+        assert_eq!(cas.len(), 2); // 根CA + 中间CA
+        
+        let stats = manager.get_statistics();
+        assert_eq!(stats.root_cas, 1);
+        assert_eq!(stats.intermediate_cas, 1);
+    }
+
+    #[test]
+    fn test_ca_factory_enterprise_environment() {
+        let result = CAFactory::create_enterprise_environment("Test Corp");
+        assert!(result.is_ok());
+        
+        let manager = result.unwrap();
+        let cas = manager.list_cas();
+        assert_eq!(cas.len(), 3); // 根CA + 2个中间CA
+        
+        let stats = manager.get_statistics();
+        assert_eq!(stats.root_cas, 1);
+        assert_eq!(stats.intermediate_cas, 2);
+    }
+
+    #[test]
+    fn test_ca_factory_simple_root() {
+        let result = CAFactory::create_simple_root_ca("Test Root CA", "Test Org");
+        assert!(result.is_ok());
+        
+        let ca = result.unwrap();
+        assert!(ca.is_root());
+        assert_eq!(ca.config().name, "Test Root CA");
+    }
+
+    #[test]
+    fn test_ca_factory_from_template() {
+        let templates = ["enterprise_root", "test_root", "tls_server", "code_signing", "iot_device"];
+        
+        for template in &templates {
+            let result = CAFactory::create_from_template(template);
+            assert!(result.is_ok(), "Failed to create CA from template: {}", template);
+        }
+
+        // 测试无效模板
+        let result = CAFactory::create_from_template("invalid_template");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_utils_validate_ca_hierarchy() {
+        let parent_config = Config::root_ca("Parent CA", "Test Org")
+            .with_validity(3650, 365)
+            .with_max_path_length(Some(3));
+        
+        let valid_child_config = Config::intermediate_ca("Child CA", "Test Org")
+            .with_validity(1825, 90)
+            .with_max_path_length(Some(2));
+        
+        let result = utils::validate_ca_hierarchy(&parent_config, &valid_child_config);
+        assert!(result.is_ok());
+        
+        // 测试无效配置
+        let invalid_child_config = Config::intermediate_ca("Invalid Child CA", "Test Org")
+            .with_validity(5000, 365); // 比父CA有效期长
+        
+        let result = utils::validate_ca_hierarchy(&parent_config, &invalid_child_config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_utils_calculate_recommended_validity() {
+        assert_eq!(utils::calculate_recommended_validity(0), 7300); // 根CA
+        assert_eq!(utils::calculate_recommended_validity(1), 3650); // 一级中间CA
+        assert_eq!(utils::calculate_recommended_validity(2), 1825); // 二级中间CA
+        assert_eq!(utils::calculate_recommended_validity(5), 365);  // 深层级CA
+    }
 }
