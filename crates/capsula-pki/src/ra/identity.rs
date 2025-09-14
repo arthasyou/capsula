@@ -854,7 +854,7 @@ impl Evaluator {
     /// 外部系统验证接口特征定义
     ///
     /// 该接口允许集成各种外部身份验证系统
-    pub fn register_external_verifier<F>(&mut self, system_name: String, verifier: F)
+    pub fn register_external_verifier<F>(&mut self, system_name: String, _verifier: F)
     where
         F: Fn(&Context, &str) -> std::result::Result<u8, String> + 'static,
     {
@@ -1114,7 +1114,6 @@ pub type AuthResult = AuthOutcome;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use super::*;
 
