@@ -24,7 +24,7 @@ impl KeyGenerator {
     }
 
     /// 生成密钥
-    pub fn generate_key(&self, key_type: KeyType) -> Result<Box<dyn capsula_key::Key>> {
+    pub fn generate_key(&self, key_type: KeyType) -> Result<Box<dyn Key>> {
         match key_type {
             KeyType::Ed25519 => Ok(Box::new(capsula_key::Curve25519::generate()?)),
             KeyType::ECDSA(_) => Ok(Box::new(capsula_key::P256Key::generate()?)), // 使用P256实现

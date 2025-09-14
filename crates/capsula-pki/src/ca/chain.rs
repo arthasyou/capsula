@@ -177,7 +177,7 @@ impl Chain {
     pub fn to_pem(&self) -> PkiResult<String> {
         let mut pem_data = String::new();
         
-        for cert in &self.certificates {
+        for _cert in &self.certificates {
             // TODO: 实现证书的PEM导出
             pem_data.push_str("-----BEGIN CERTIFICATE-----\n");
             pem_data.push_str("TODO: Certificate PEM data\n");
@@ -188,7 +188,7 @@ impl Chain {
     }
 
     /// 从PEM格式导入
-    pub fn from_pem(pem_data: &str) -> PkiResult<Self> {
+    pub fn from_pem(_pem_data: &str) -> PkiResult<Self> {
         // TODO: 实现从PEM导入证书链
         Err(PkiError::ParseError("PEM import not yet implemented".to_string()))
     }

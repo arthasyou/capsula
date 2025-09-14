@@ -2,7 +2,7 @@
 //!
 //! 提供证书颁发机构的核心功能
 
-use capsula_key::{Curve25519, Key};
+use capsula_key::Curve25519;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -163,7 +163,7 @@ impl Authority {
     /// 签发证书 (使用CertificateInfo)
     pub fn sign_certificate(
         &mut self,
-        public_key: &Curve25519,
+        _public_key: &Curve25519, // TODO: Use for actual certificate signing
         cert_info: CertificateInfo,
     ) -> PkiResult<X509Certificate> {
         // TODO: 实现真正的证书签发逻辑
@@ -247,7 +247,7 @@ impl Authority {
     }
 
     /// 验证CA证书
-    fn validate_ca_certificate(certificate: &X509Certificate) -> PkiResult<()> {
+    fn validate_ca_certificate(_certificate: &X509Certificate) -> PkiResult<()> {
         // TODO: 实现更完整的CA证书验证
         // - 检查是否为CA证书 (Basic Constraints)
         // - 检查密钥用途 (Key Usage)

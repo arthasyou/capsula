@@ -1,6 +1,5 @@
 //! 状态缓存模块
 
-use crate::error::Result;
 use std::collections::HashMap;
 
 /// 缓存项

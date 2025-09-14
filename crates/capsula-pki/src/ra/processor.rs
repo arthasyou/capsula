@@ -127,8 +127,8 @@ impl Processor {
         &self,
         csr: &Csr,
         context: &Context,
-        ca_cert: &X509Certificate,
-        ca_private_key: &[u8],
+        _ca_cert: &X509Certificate,
+        _ca_private_key: &[u8],
     ) -> Result<X509Certificate> {
         // 处理申请
         let result = self.process_request(csr, context)?;
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_processor_creation() {
-        let processor = Processor::default();
+        let _processor = Processor::default();
         assert!(true); // 基本创建测试
     }
 

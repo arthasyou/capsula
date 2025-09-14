@@ -408,7 +408,6 @@ impl Default for LifecycleManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ca::CAFactory;
 
     #[test]
     fn test_lifecycle_manager_creation() {

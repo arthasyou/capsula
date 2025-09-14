@@ -436,7 +436,7 @@ impl AutomationEngine {
         &self,
         certificate_serial: &str,
         certificates: &mut HashMap<String, CertificateLifecycle>,
-        ca_manager: &mut CAManager,
+        _ca_manager: &mut CAManager, // TODO: Use for actual renewal via CA
     ) -> PkiResult<String> {
         // TODO: 实现实际的自动续期逻辑
         // 这里需要：
@@ -444,11 +444,11 @@ impl AutomationEngine {
         // 2. 调用续期管理器
         // 3. 更新证书生命周期信息
 
-        let lifecycle = certificates.get(certificate_serial)
+        let _lifecycle = certificates.get(certificate_serial)
             .ok_or_else(|| PkiError::LifecycleError(format!("Certificate {} not found", certificate_serial)))?;
 
         // 创建自动续期请求
-        let renewal_request = RenewalRequest {
+        let _renewal_request = RenewalRequest {
             certificate_serial: certificate_serial.to_string(),
             reason: RenewalReason::Automatic,
             requested_by: "AutomationEngine".to_string(),
@@ -528,7 +528,6 @@ impl Default for AutomationEngine {
 mod tests {
     use super::*;
     use crate::lifecycle::{CertificateLifecycle, CertificateStatus};
-    use crate::ca::Manager as CAManager;
 
     fn create_test_certificate(serial: &str, days_until_expiry: i64) -> CertificateLifecycle {
         let now = OffsetDateTime::now_utc();

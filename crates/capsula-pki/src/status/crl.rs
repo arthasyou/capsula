@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use capsula_key::{Curve25519, DigitalSignature, Key, LocationInfo};
+use capsula_key::{Curve25519, DigitalSignature};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -125,12 +125,12 @@ impl CertificateRevocationList {
     }
 
     /// 签名CRL
-    pub fn sign(&mut self, ca_keypair: &Curve25519) -> PkiResult<()> {
+    pub fn sign(&mut self, _ca_keypair: &Curve25519) -> PkiResult<()> {
         // 序列化CRL数据（不包括签名）
         let mut crl_data = self.clone();
         crl_data.signature = None;
 
-        let data = serde_json::to_vec(&crl_data)?;
+        let _data = serde_json::to_vec(&crl_data)?;
 
         // TODO: 创建签名
         // let location_info = LocationInfo::default();
@@ -151,8 +151,8 @@ impl CertificateRevocationList {
     }
 
     /// 验证CRL签名
-    pub fn verify(&self, ca_cert: &X509Certificate) -> PkiResult<bool> {
-        let signature = self
+    pub fn verify(&self, _ca_cert: &X509Certificate) -> PkiResult<bool> {
+        let _signature = self
             .signature
             .as_ref()
             .ok_or_else(|| PkiError::CRLError("CRL is not signed".to_string()))?;
@@ -160,7 +160,7 @@ impl CertificateRevocationList {
         // 序列化CRL数据（不包括签名）
         let mut crl_data = self.clone();
         crl_data.signature = None;
-        let data = serde_json::to_vec(&crl_data)?;
+        let _data = serde_json::to_vec(&crl_data)?;
 
         // TODO: 从CA证书提取公钥
         // let _ca_public_key = ca_cert.public_key_bytes()

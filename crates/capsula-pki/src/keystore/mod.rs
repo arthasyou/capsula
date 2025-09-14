@@ -105,6 +105,7 @@ pub struct KeystoreManager {
     /// 密钥元数据缓存
     key_metadata_cache: HashMap<String, KeyMetadata>,
     /// HSM连接状态
+    #[allow(dead_code)] // TODO: Implement HSM functionality
     hsm_available: bool,
 }
 

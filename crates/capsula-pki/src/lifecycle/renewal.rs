@@ -112,7 +112,7 @@ impl RenewalManager {
     /// 处理续期请求
     pub fn renew_certificate(
         &mut self,
-        ca_manager: &mut CAManager,
+        _ca_manager: &mut CAManager, // TODO: Use for actual CA operations
         request: RenewalRequest,
     ) -> PkiResult<RenewalResult> {
         // 验证续期请求
@@ -124,7 +124,7 @@ impl RenewalManager {
         }
 
         // 执行续期
-        let renewal_result = self.perform_renewal(ca_manager, &request)?;
+        let renewal_result = self.perform_renewal(_ca_manager, &request)?;
 
         // 记录续期历史
         self.record_renewal(&request, &renewal_result)?;
@@ -152,7 +152,7 @@ impl RenewalManager {
     }
 
     /// 获取续期建议
-    pub fn get_renewal_suggestion(&self, certificate_serial: &str, days_until_expiry: u32) -> RenewalSuggestion {
+    pub fn get_renewal_suggestion(&self, _certificate_serial: &str, days_until_expiry: u32) -> RenewalSuggestion {
         if days_until_expiry <= self.policy.advance_notification_days {
             if days_until_expiry <= 7 {
                 RenewalSuggestion::Urgent {
@@ -239,7 +239,7 @@ impl RenewalManager {
     /// 执行证书续期
     fn perform_renewal(
         &mut self,
-        ca_manager: &mut CAManager,
+        _ca_manager: &mut CAManager, // TODO: Use for actual certificate renewal
         request: &RenewalRequest,
     ) -> PkiResult<RenewalResult> {
         // TODO: 实现实际的证书续期逻辑
@@ -336,7 +336,6 @@ impl Default for RenewalManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ca::Manager as CAManager;
 
     #[test]
     fn test_renewal_manager_creation() {

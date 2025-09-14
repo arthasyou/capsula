@@ -269,13 +269,13 @@ impl CertificateStore {
     }
 
     /// 存储证书
-    pub fn store_certificate(&mut self, cert: &X509Certificate) -> PkiResult<()> {
+    pub fn store_certificate(&mut self, _cert: &X509Certificate) -> PkiResult<()> {
         // TODO: 实现证书存储逻辑
         // 目前使用简化的临时实现
         let serial_number = "temp-serial-123".to_string();
 
         // 简化的元数据
-        let metadata = CertificateMetadata {
+        let _metadata = CertificateMetadata {
             serial_number: serial_number.clone(),
             subject: "temp subject".to_string(),
             issuer: "temp issuer".to_string(),

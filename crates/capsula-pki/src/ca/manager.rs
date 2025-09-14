@@ -189,7 +189,7 @@ impl Manager {
 
         // TODO: Parse public_key_info string to create Curve25519 key
         // For now, create a temporary key - this needs to be properly implemented
-        let temp_key = capsula_key::Curve25519::generate()
+        let temp_key = Curve25519::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to parse public key: {e}")))?;
         
         let certificate = ca.issue_certificate(
@@ -252,7 +252,7 @@ impl Manager {
 
         // TODO: Convert CSR public key to Curve25519
         // For now, create a temporary key - this needs to be properly implemented
-        let temp_key = capsula_key::Curve25519::generate()
+        let temp_key = Curve25519::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to parse CSR public key: {e}")))?;
 
         let certificate = ca.issue_certificate(
