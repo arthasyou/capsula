@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::protocol::types::{CapsulaGranted, CapsulaStage};
 
 /// 1阶数据胶囊 - 对原始报告的安全封装
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capsula1 {
     pub header: Header,
     pub meta: Meta,
@@ -17,7 +17,7 @@ pub struct Capsula1 {
     pub keyring: Vec<KeyWrap>, // 传输时的密钥包装
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
     pub ver: String,         // "1.0"
     pub stage: CapsulaStage, // 1
@@ -27,7 +27,7 @@ pub struct Header {
     pub created_at: String,  // RFC3339 字符串
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Meta {
     pub producer: String, // 数据采集者（医院）
     pub owner: String,    // 数据拥有者（患者）
