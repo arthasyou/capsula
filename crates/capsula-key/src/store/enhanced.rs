@@ -1,14 +1,17 @@
 //! Enhanced KeyStore implementation with Key trait integration
-//! 
+//!
 //! This module provides a higher-level KeyStore API that works directly with
 //! Key trait objects, providing automatic serialization/deserialization.
 
 use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-use super::{KeyStore, KeyHandle, KeyMetadata};
-use crate::key::{Key, Curve25519, P256Key, RsaKey, ExportablePrivateKey, Algorithm};
-use crate::error::{Error, Result};
+use super::{KeyHandle, KeyMetadata, KeyStore};
+use crate::{
+    error::{Error, Result},
+    key::{Algorithm, Curve25519, ExportablePrivateKey, Key, P256Key, RsaKey},
+};
 
 /// Enhanced key metadata with more PKI-specific information
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -87,7 +90,7 @@ impl EnhancedKeyStore {
 
     /// Store a Key trait object with enhanced metadata
     pub fn store_key_object(
-        &mut self, 
+        &mut self,
         key: &dyn Key,
         usage: Vec<KeyUsage>,
         validity: Option<KeyValidity>,
@@ -99,9 +102,15 @@ impl EnhancedKeyStore {
         let mut attributes = HashMap::new();
         attributes.insert("usage".to_string(), serde_json::to_string(&usage)?);
         attributes.insert("validity".to_string(), serde_json::to_string(&validity)?);
-        attributes.insert("cert_serial".to_string(), serde_json::to_string(&None::<String>)?);
-        attributes.insert("backup_status".to_string(), serde_json::to_string(&BackupStatus::None)?);
-        
+        attributes.insert(
+            "cert_serial".to_string(),
+            serde_json::to_string(&None::<String>)?,
+        );
+        attributes.insert(
+            "backup_status".to_string(),
+            serde_json::to_string(&BackupStatus::None)?,
+        );
+
         let metadata = KeyMetadata {
             handle,
             algorithm,
@@ -120,11 +129,11 @@ impl EnhancedKeyStore {
         };
 
         // Serialize the key using PKCS#8 format
-        let key_material = self.serialize_key(key)?;
+        let pkcs8_der_bytes = self.serialize_key(key)?;
 
         // Store the key and metadata
-        self.inner.store_key(metadata, key_material)?;
-        
+        self.inner.store_key(metadata, pkcs8_der_bytes)?;
+
         // Cache enhanced metadata
         self.metadata_cache.insert(handle, enhanced_metadata);
 
@@ -136,11 +145,11 @@ impl EnhancedKeyStore {
 
     /// Retrieve a Key trait object by handle
     pub fn get_key_object(&self, handle: KeyHandle) -> Result<Box<dyn Key>> {
-        let (metadata, key_material) = self.inner.get_key(handle)?;
-        
+        let (metadata, pkcs8_der_bytes) = self.inner.get_key(handle)?;
+
         // Deserialize based on algorithm
-        let key = self.deserialize_key(metadata.algorithm, &key_material)?;
-        
+        let key = self.deserialize_key(metadata.algorithm, &pkcs8_der_bytes)?;
+
         Ok(key)
     }
 
@@ -150,26 +159,34 @@ impl EnhancedKeyStore {
         if let Some(cached_metadata) = self.metadata_cache.get(&handle) {
             return Ok(cached_metadata.clone());
         }
-        
+
         // Fallback to loading from stored attributes
         let base_metadata = self.inner.get_metadata(handle)?;
-        
-        let usage = base_metadata.attributes.get("usage")
+
+        let usage = base_metadata
+            .attributes
+            .get("usage")
             .and_then(|v| serde_json::from_str(v).ok())
             .unwrap_or_else(|| vec![KeyUsage::DigitalSignature]);
-            
-        let validity = base_metadata.attributes.get("validity")
+
+        let validity = base_metadata
+            .attributes
+            .get("validity")
             .and_then(|v| serde_json::from_str(v).ok())
             .unwrap_or(None);
-            
-        let cert_serial = base_metadata.attributes.get("cert_serial")
+
+        let cert_serial = base_metadata
+            .attributes
+            .get("cert_serial")
             .and_then(|v| serde_json::from_str(v).ok())
             .unwrap_or(None);
-            
-        let backup_status = base_metadata.attributes.get("backup_status")
+
+        let backup_status = base_metadata
+            .attributes
+            .get("backup_status")
             .and_then(|v| serde_json::from_str(v).ok())
             .unwrap_or(BackupStatus::None);
-        
+
         // Extract PKI attributes (those with pki_ prefix)
         let mut pki_attributes = HashMap::new();
         for (key, value) in &base_metadata.attributes {
@@ -177,7 +194,7 @@ impl EnhancedKeyStore {
                 pki_attributes.insert(pki_key.to_string(), value.clone());
             }
         }
-        
+
         Ok(EnhancedKeyMetadata {
             base: base_metadata,
             usage,
@@ -190,18 +207,18 @@ impl EnhancedKeyStore {
 
     /// Update enhanced metadata for a key
     pub fn update_enhanced_metadata(
-        &mut self, 
-        handle: KeyHandle, 
-        metadata: &EnhancedKeyMetadata
+        &mut self,
+        handle: KeyHandle,
+        metadata: &EnhancedKeyMetadata,
     ) -> Result<()> {
         // Update cache
         self.metadata_cache.insert(handle, metadata.clone());
-        
+
         // Note: This doesn't update the persistent storage since KeyStore doesn't provide
         // a method to update metadata. The updated metadata will be lost when the
         // EnhancedKeyStore is dropped. For full persistence, consider using a separate
         // metadata store or extending the KeyStore trait.
-        
+
         Ok(())
     }
 
@@ -209,14 +226,14 @@ impl EnhancedKeyStore {
     pub fn list_keys_with_info(&self) -> Result<Vec<(KeyHandle, Algorithm, String)>> {
         let handles = self.inner.list_keys()?;
         let mut result = Vec::new();
-        
+
         for handle in handles {
             if let Ok(metadata) = self.inner.get_metadata(handle) {
                 let key_id = metadata.label.unwrap_or_else(|| "unlabeled".to_string());
                 result.push((handle, metadata.algorithm, key_id));
             }
         }
-        
+
         Ok(result)
     }
 
@@ -251,14 +268,16 @@ impl EnhancedKeyStore {
 
     /// Generate a new unique key handle
     fn generate_handle(&self) -> KeyHandle {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        use std::time::SystemTime;
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+            time::SystemTime,
+        };
 
         let mut hasher = DefaultHasher::new();
         SystemTime::now().hash(&mut hasher);
         self.key_registry.len().hash(&mut hasher);
-        
+
         KeyHandle(hasher.finish())
     }
 
@@ -267,60 +286,73 @@ impl EnhancedKeyStore {
         match key.algorithm() {
             Algorithm::Ed25519 => {
                 // Safely downcast to Curve25519
-                let curve25519 = key.as_any()
-                    .downcast_ref::<Curve25519>()
-                    .ok_or_else(|| Error::KeyError("Failed to downcast to Curve25519".to_string()))?;
-                
-                curve25519.to_pkcs8_der()
-                    .map_err(|e| Error::EncodingError(format!("Failed to serialize Curve25519: {}", e)))
+                let curve25519 = key.as_any().downcast_ref::<Curve25519>().ok_or_else(|| {
+                    Error::KeyError("Failed to downcast to Curve25519".to_string())
+                })?;
+
+                curve25519.to_pkcs8_der().map_err(|e| {
+                    Error::EncodingError(format!("Failed to serialize Curve25519: {}", e))
+                })
             }
             Algorithm::P256 => {
-                let p256_key = key.as_any()
+                let p256_key = key
+                    .as_any()
                     .downcast_ref::<P256Key>()
                     .ok_or_else(|| Error::KeyError("Failed to downcast to P256Key".to_string()))?;
-                    
-                p256_key.to_pkcs8_der()
-                    .map_err(|e| Error::EncodingError(format!("Failed to serialize P256Key: {}", e)))
+
+                p256_key.to_pkcs8_der().map_err(|e| {
+                    Error::EncodingError(format!("Failed to serialize P256Key: {}", e))
+                })
             }
             Algorithm::Rsa => {
-                let rsa_key = key.as_any()
+                let rsa_key = key
+                    .as_any()
                     .downcast_ref::<RsaKey>()
                     .ok_or_else(|| Error::KeyError("Failed to downcast to RsaKey".to_string()))?;
-                    
-                rsa_key.to_pkcs8_der()
+
+                rsa_key
+                    .to_pkcs8_der()
                     .map_err(|e| Error::EncodingError(format!("Failed to serialize RsaKey: {}", e)))
             }
             Algorithm::X25519 => {
                 // X25519 is handled as part of Curve25519
-                Err(Error::KeyError("X25519 should be part of Curve25519".to_string()))
+                Err(Error::KeyError(
+                    "X25519 should be part of Curve25519".to_string(),
+                ))
             }
         }
     }
 
     /// Deserialize bytes to a Key trait object
-    fn deserialize_key(&self, algorithm: Algorithm, key_material: &[u8]) -> Result<Box<dyn Key>> {
+    fn deserialize_key(
+        &self,
+        algorithm: Algorithm,
+        pkcs8_der_bytes: &[u8],
+    ) -> Result<Box<dyn Key>> {
         match algorithm {
             Algorithm::Ed25519 => {
-                let curve25519 = Curve25519::from_pkcs8_der(key_material)
-                    .map_err(|e| Error::EncodingError(format!("Failed to deserialize Curve25519: {}", e)))?;
+                let curve25519 = Curve25519::from_pkcs8_der(pkcs8_der_bytes).map_err(|e| {
+                    Error::EncodingError(format!("Failed to deserialize Curve25519: {}", e))
+                })?;
                 Ok(Box::new(curve25519))
             }
             Algorithm::P256 => {
-                let p256_key = P256Key::from_pkcs8_der(key_material)
-                    .map_err(|e| Error::EncodingError(format!("Failed to deserialize P256Key: {}", e)))?;
+                let p256_key = P256Key::from_pkcs8_der(pkcs8_der_bytes).map_err(|e| {
+                    Error::EncodingError(format!("Failed to deserialize P256Key: {}", e))
+                })?;
                 Ok(Box::new(p256_key))
             }
             Algorithm::Rsa => {
-                let rsa_key = RsaKey::from_pkcs8_der(key_material)
-                    .map_err(|e| Error::EncodingError(format!("Failed to deserialize RsaKey: {}", e)))?;
+                let rsa_key = RsaKey::from_pkcs8_der(pkcs8_der_bytes).map_err(|e| {
+                    Error::EncodingError(format!("Failed to deserialize RsaKey: {}", e))
+                })?;
                 Ok(Box::new(rsa_key))
             }
-            Algorithm::X25519 => {
-                Err(Error::KeyError("X25519 should be part of Curve25519".to_string()))
-            }
+            Algorithm::X25519 => Err(Error::KeyError(
+                "X25519 should be part of Curve25519".to_string(),
+            )),
         }
     }
-
 }
 
 #[cfg(test)]
@@ -338,11 +370,13 @@ mod tests {
         let key_id_before = key.key_id_hex();
 
         // Store the key
-        let handle = enhanced_store.store_key_object(
-            &key,
-            vec![KeyUsage::DigitalSignature, KeyUsage::CertSigning],
-            None,
-        ).unwrap();
+        let handle = enhanced_store
+            .store_key_object(
+                &key,
+                vec![KeyUsage::DigitalSignature, KeyUsage::CertSigning],
+                None,
+            )
+            .unwrap();
 
         // Check if key exists
         assert!(enhanced_store.exists(handle).unwrap());
@@ -362,10 +396,14 @@ mod tests {
         assert_eq!(keys[0].0, handle);
 
         // Associate with certificate
-        enhanced_store.associate_certificate(handle, "cert-123".to_string()).unwrap();
+        enhanced_store
+            .associate_certificate(handle, "cert-123".to_string())
+            .unwrap();
 
         // Update backup status
-        enhanced_store.update_backup_status(handle, BackupStatus::SecureStorage).unwrap();
+        enhanced_store
+            .update_backup_status(handle, BackupStatus::SecureStorage)
+            .unwrap();
 
         // Delete key
         enhanced_store.delete_key_complete(handle).unwrap();
@@ -379,27 +417,25 @@ mod tests {
 
         // Store Curve25519 key
         let curve25519_key = Curve25519::generate().unwrap();
-        let handle1 = enhanced_store.store_key_object(
-            &curve25519_key,
-            vec![KeyUsage::DigitalSignature],
-            None,
-        ).unwrap();
+        let handle1 = enhanced_store
+            .store_key_object(&curve25519_key, vec![KeyUsage::DigitalSignature], None)
+            .unwrap();
 
         // Store P256 key
         let p256_key = P256Key::generate().unwrap();
-        let handle2 = enhanced_store.store_key_object(
-            &p256_key,
-            vec![KeyUsage::KeyAgreement],
-            None,
-        ).unwrap();
+        let handle2 = enhanced_store
+            .store_key_object(&p256_key, vec![KeyUsage::KeyAgreement], None)
+            .unwrap();
 
         // Store RSA key
         let rsa_key = RsaKey::generate_2048().unwrap();
-        let handle3 = enhanced_store.store_key_object(
-            &rsa_key,
-            vec![KeyUsage::DigitalSignature, KeyUsage::DataEncipherment],
-            None,
-        ).unwrap();
+        let handle3 = enhanced_store
+            .store_key_object(
+                &rsa_key,
+                vec![KeyUsage::DigitalSignature, KeyUsage::DataEncipherment],
+                None,
+            )
+            .unwrap();
 
         // Verify all keys can be retrieved
         let retrieved1 = enhanced_store.get_key_object(handle1).unwrap();
@@ -416,7 +452,10 @@ mod tests {
 
         // Test metadata persistence and caching
         let metadata3 = enhanced_store.get_enhanced_metadata(handle3).unwrap();
-        assert_eq!(metadata3.usage, vec![KeyUsage::DigitalSignature, KeyUsage::DataEncipherment]);
+        assert_eq!(
+            metadata3.usage,
+            vec![KeyUsage::DigitalSignature, KeyUsage::DataEncipherment]
+        );
         assert_eq!(metadata3.backup_status, BackupStatus::None);
     }
 }

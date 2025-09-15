@@ -57,7 +57,7 @@ impl HsmKeyStore {
 }
 
 impl KeyStore for HsmKeyStore {
-    fn store_key(&self, _metadata: KeyMetadata, _key_material: Vec<u8>) -> Result<()> {
+    fn store_key(&self, _metadata: KeyMetadata, _pkcs8_der_bytes: Vec<u8>) -> Result<()> {
         // TODO: 实现密钥存储到HSM
         // 注意：HSM通常不直接存储外部密钥材料
         // 而是在HSM内部生成密钥

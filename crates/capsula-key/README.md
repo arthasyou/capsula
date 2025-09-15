@@ -126,7 +126,7 @@ pub enum KeyStoreConfig {
 // 统一的存储接口
 #[async_trait]
 pub trait KeyStore: Send + Sync {
-    async fn store_key(&self, metadata: KeyMetadata, key_material: Vec<u8>) -> Result<()>;
+    async fn store_key(&self, metadata: KeyMetadata, pkcs8_der_bytes: Vec<u8>) -> Result<()>;
     async fn get_key(&self, handle: KeyHandle) -> Result<(KeyMetadata, Vec<u8>)>;
     // ... 其他方法
 }

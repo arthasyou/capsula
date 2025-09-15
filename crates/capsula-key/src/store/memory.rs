@@ -29,7 +29,7 @@ impl Default for MemoryKeyStore {
 }
 
 impl KeyStore for MemoryKeyStore {
-    fn store_key(&self, metadata: KeyMetadata, key_material: Vec<u8>) -> Result<()> {
+    fn store_key(&self, metadata: KeyMetadata, pkcs8_der_bytes: Vec<u8>) -> Result<()> {
         let mut keys = self
             .keys
             .write()
@@ -39,7 +39,7 @@ impl KeyStore for MemoryKeyStore {
             return Err(Error::key_exists(metadata.handle));
         }
 
-        keys.insert(metadata.handle, (metadata, key_material));
+        keys.insert(metadata.handle, (metadata, pkcs8_der_bytes));
         Ok(())
     }
 
@@ -117,11 +117,11 @@ mod tests {
             attributes: HashMap::new(),
         };
 
-        let key_material = vec![42; 32];
+        let pkcs8_der_bytes = vec![42; 32];
 
         // Store key
         store
-            .store_key(metadata.clone(), key_material.clone())
+            .store_key(metadata.clone(), pkcs8_der_bytes.clone())
             .unwrap();
 
         // Check exists
@@ -130,7 +130,7 @@ mod tests {
         // Get key
         let (retrieved_metadata, retrieved_material) = store.get_key(handle).unwrap();
         assert_eq!(retrieved_metadata.handle, metadata.handle);
-        assert_eq!(retrieved_material, key_material);
+        assert_eq!(retrieved_material, pkcs8_der_bytes);
 
         // Get metadata only
         let retrieved_metadata = store.get_metadata(handle).unwrap();
@@ -158,15 +158,15 @@ mod tests {
             attributes: HashMap::new(),
         };
 
-        let key_material = vec![42; 32];
+        let pkcs8_der_bytes = vec![42; 32];
 
         // First store should succeed
         store
-            .store_key(metadata.clone(), key_material.clone())
+            .store_key(metadata.clone(), pkcs8_der_bytes.clone())
             .unwrap();
 
         // Second store should fail
-        let result = store.store_key(metadata, key_material);
+        let result = store.store_key(metadata, pkcs8_der_bytes);
         assert!(result.is_err());
     }
 }

@@ -3,14 +3,13 @@ mod file;
 mod hsm;
 mod memory;
 
-pub use enhanced::{EnhancedKeyStore, EnhancedKeyMetadata, KeyUsage, KeyValidity, BackupStatus};
+pub use enhanced::{BackupStatus, EnhancedKeyMetadata, EnhancedKeyStore, KeyUsage, KeyValidity};
 pub use file::FileKeyStore;
 pub use hsm::HsmKeyStore;
 pub use memory::MemoryKeyStore;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
-use crate::key::Algorithm;
+use crate::{error::Result, key::Algorithm};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct KeyHandle(pub u64);
@@ -28,7 +27,7 @@ pub struct KeyMetadata {
 /// Trait for key storage backends (synchronous)
 pub trait KeyStore: Send + Sync {
     /// Store a key with its metadata
-    fn store_key(&self, metadata: KeyMetadata, key_material: Vec<u8>) -> Result<()>;
+    fn store_key(&self, metadata: KeyMetadata, pkcs8_der_bytes: Vec<u8>) -> Result<()>;
 
     /// Retrieve a key by its handle
     fn get_key(&self, handle: KeyHandle) -> Result<(KeyMetadata, Vec<u8>)>;
