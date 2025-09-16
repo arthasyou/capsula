@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::Json, routing::get, Router};
+use axum::response::Json;
 use serde_json::json;
 
 pub async fn health() -> Json<serde_json::Value> {
@@ -13,10 +13,4 @@ pub async fn ca_status() -> Json<serde_json::Value> {
         "initialized": false,
         "message": "Simple PKI server working"
     }))
-}
-
-pub fn create_simple_router() -> Router {
-    Router::new()
-        .route("/simple-health", get(health))
-        .route("/simple-ca-status", get(ca_status))
 }

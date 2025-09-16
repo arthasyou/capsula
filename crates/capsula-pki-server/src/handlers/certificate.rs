@@ -4,6 +4,8 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::Json,
+    routing::{get, post},
+    Router,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
@@ -163,12 +165,4 @@ pub async fn revoke_certificate(
     // 4. Log the revocation
 
     Ok(StatusCode::OK)
-}
-
-pub fn create_router() -> OpenApiRouter {
-    OpenApiRouter::new()
-        .routes(routes!(create_certificate))
-        .routes(routes!(get_certificate))
-        .routes(routes!(list_certificates))
-        .routes(routes!(revoke_certificate))
 }

@@ -7,6 +7,7 @@ use crate::error::Result;
 pub struct Settings {
     pub http: HttpCfg,
     pub pki: PkiCfg,
+    pub surrealdb: crate::db::SurrealdbCfg,
 }
 
 #[derive(Debug, Deserialize)]
