@@ -1,15 +1,9 @@
 //! Certificate Authority management handlers
 
-use axum::{
-    http::StatusCode,
-    response::Json,
-    routing::{get, post},
-    Router,
-};
+use axum::{http::StatusCode, response::Json};
 use capsula_pki::keystore::{
     FileSystemBackend, KeyGenerationConfig, KeyType, KeyUsage, KeystoreManager,
 };
-use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
     error::AppError,
@@ -19,12 +13,12 @@ use crate::{
 /// Get CA status and information
 #[utoipa::path(
     get,
-    path = "/api/v1/ca/status",
+    path = "/status",
     responses(
         (status = 200, description = "CA status retrieved successfully", body = CaStatus),
         (status = 500, description = "Internal server error")
     ),
-    tag = "ca"
+    tag = "CA"
 )]
 pub async fn get_ca_status() -> Result<Json<CaStatus>, AppError> {
     tracing::info!("Getting CA status");
@@ -61,13 +55,13 @@ pub async fn get_ca_status() -> Result<Json<CaStatus>, AppError> {
 /// Get CA certificate
 #[utoipa::path(
     get,
-    path = "/api/v1/ca/certificate",
+    path = "/certificate",
     responses(
         (status = 200, description = "CA certificate retrieved successfully", body = CaInfo),
         (status = 404, description = "CA not initialized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "ca"
+    tag = "CA"
 )]
 pub async fn get_ca_certificate() -> Result<Json<CaInfo>, AppError> {
     tracing::info!("Getting CA certificate");
@@ -93,14 +87,14 @@ pub async fn get_ca_certificate() -> Result<Json<CaInfo>, AppError> {
 /// Initialize Certificate Authority
 #[utoipa::path(
     post,
-    path = "/ca/init",
+    path = "/initialize",
     request_body = CaInitRequest,
     responses(
         (status = 201, description = "CA initialized successfully", body = CaInfo),
         (status = 400, description = "Bad request or CA already initialized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "ca"
+    tag = "CA"
 )]
 pub async fn initialize_ca(
     Json(request): Json<CaInitRequest>,

@@ -23,7 +23,7 @@ pub fn create_routes() -> Router {
     let doc = ApiDoc::openapi();
 
     Router::new()
-        // .merge(create_health_router())
+        .merge(health::create_router())
         .nest("/ca", ca::create_router())
         .nest("/certificates", certificate::create_router())
         .layer(cors)

@@ -4,10 +4,7 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::Json,
-    routing::{get, post},
-    Router,
 };
-use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use crate::{
@@ -21,14 +18,14 @@ use crate::{
 /// Generate a new certificate
 #[utoipa::path(
     post,
-    path = "/api/v1/certificates",
+    path = "/create",
     request_body = CertificateRequest,
     responses(
         (status = 201, description = "Certificate created successfully", body = CertificateResponse),
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "certificates"
+    tag = "Certificate"
 )]
 pub async fn create_certificate(
     Json(request): Json<CertificateRequest>,
@@ -64,7 +61,7 @@ pub async fn create_certificate(
 /// Get certificate by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/certificates/{certificate_id}",
+    path = "/get/{certificate_id}",
     params(
         ("certificate_id" = Uuid, Path, description = "Certificate ID")
     ),
@@ -73,7 +70,7 @@ pub async fn create_certificate(
         (status = 404, description = "Certificate not found"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "certificates"
+    tag = "Certificate"
 )]
 pub async fn get_certificate(
     Path(certificate_id): Path<Uuid>,
@@ -102,13 +99,13 @@ pub async fn get_certificate(
 /// List certificates
 #[utoipa::path(
     get,
-    path = "/api/v1/certificates",
+    path = "/list",
     params(CertificateListQuery),
     responses(
         (status = 200, description = "Certificates listed successfully", body = CertificateListResponse),
         (status = 500, description = "Internal server error")
     ),
-    tag = "certificates"
+    tag = "Certificate"
 )]
 pub async fn list_certificates(
     Query(query): Query<CertificateListQuery>,
@@ -135,7 +132,7 @@ pub async fn list_certificates(
 /// Revoke certificate
 #[utoipa::path(
     post,
-    path = "/api/v1/certificates/{certificate_id}/revoke",
+    path = "/revoke/{certificate_id}",
     params(
         ("certificate_id" = Uuid, Path, description = "Certificate ID")
     ),
@@ -146,7 +143,7 @@ pub async fn list_certificates(
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "certificates"
+    tag = "Certificate"
 )]
 pub async fn revoke_certificate(
     Path(certificate_id): Path<Uuid>,

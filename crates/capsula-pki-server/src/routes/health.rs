@@ -11,7 +11,7 @@ use crate::handlers::health::{ca_status, health};
 )]
 pub struct HealthApi;
 
-pub fn create_health_router() -> Router {
+pub fn create_router() -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/status", get(ca_status))
