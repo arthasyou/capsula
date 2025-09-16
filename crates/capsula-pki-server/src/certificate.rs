@@ -13,6 +13,8 @@ use crate::{
 pub struct CertificateRequest {
     /// Username for certificate identification
     pub username: String,
+    /// Key algorithm for the certificate
+    pub algorithm: crate::models::certificate::CertificateAlgorithm,
 }
 
 /// Certificate usage types
@@ -257,7 +259,7 @@ impl CertificateSigner {
         &self,
         certificate_pem: &str,
         private_key_pem: &str,
-        _request: &CertificateRequest,
+        request: &CertificateRequest,
         validity_days: Option<u32>,
     ) -> Result<IssuedCertificate> {
         // Extract certificate information for test PKI
@@ -266,7 +268,14 @@ impl CertificateSigner {
         let not_after = now + chrono::Duration::days(validity_days as i64);
 
         let serial_number = self.generate_serial_number()?;
-        let subject = self.create_subject_dn(_request);
+        let subject = self.create_subject_dn(request);
+
+        // Determine key algorithm from request
+        let (key_algorithm, key_size) = match &request.algorithm {
+            crate::models::certificate::CertificateAlgorithm::Ed25519 => ("Ed25519".to_string(), None),
+            crate::models::certificate::CertificateAlgorithm::RSA { key_size } => (format!("RSA-{}", key_size), Some(*key_size)),
+            crate::models::certificate::CertificateAlgorithm::ECDSA { curve } => (format!("ECDSA-{}", curve), None),
+        };
 
         Ok(IssuedCertificate {
             serial_number,
@@ -276,8 +285,8 @@ impl CertificateSigner {
             issuer: "CN=Capsula Intermediate CA, O=Capsula Test PKI, OU=Intermediate CA".to_string(),
             not_before: now,
             not_after,
-            key_algorithm: "RSA".to_string(),
-            key_size: Some(2048),
+            key_algorithm,
+            key_size,
             usage_type: CertificateUsageType::Client, // Default to client certificates for test
             issued_at: now,
         })
@@ -294,6 +303,7 @@ impl CertificateSigner {
         // Create a certificate request for renewal (same as new certificate)
         let request = CertificateRequest {
             username: username.to_string(),
+            algorithm: crate::models::certificate::CertificateAlgorithm::Ed25519,
         };
         
         // Sign the new certificate with custom validity or default

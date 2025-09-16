@@ -280,4 +280,25 @@ impl CertificateService {
 
         Ok(())
     }
+    
+    /// Check if user already has an active certificate with the specified algorithm
+    pub async fn get_active_certificate_by_user_and_algorithm(
+        &self,
+        user_id: &str,
+        algorithm: &str,
+    ) -> Result<Option<CertificateRecord>> {
+        let cert: Option<CertificateRecord> = self
+            .db
+            .query(
+                "SELECT * FROM certificates WHERE user_id = $user_id AND key_algorithm = $algorithm AND status = 'active'"
+            )
+            .bind(("user_id", user_id.to_string()))
+            .bind(("algorithm", algorithm.to_string()))
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to query certificate by user and algorithm: {}", e)))?
+            .take(0)
+            .map_err(|e| AppError::Internal(format!("Failed to parse certificate: {}", e)))?;
+
+        Ok(cert)
+    }
 }

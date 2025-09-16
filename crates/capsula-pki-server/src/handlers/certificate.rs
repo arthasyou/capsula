@@ -11,12 +11,22 @@ use crate::{
     db::{certificate::CertificateService, get_db},
     error::{AppError, Result},
     models::certificate::{
-        CertificateListQuery, CertificateListResponse, CertificateRecord, CertificateRequest,
-        CertificateResponse, RenewalRequest, RevocationRequest, UserCertificateQuery,
-        UserCertificateListResponse,
+        CertificateAlgorithm, CertificateListQuery, CertificateListResponse, CertificateRecord, 
+        CertificateRequest, CertificateResponse, RenewalRequest, RevocationRequest, 
+        UserCertificateQuery, UserCertificateListResponse,
     },
     state::AppState,
 };
+use capsula_pki::ca::config::KeyAlgorithm;
+
+/// Convert CertificateAlgorithm to string representation for database storage
+fn algorithm_to_string(algorithm: &CertificateAlgorithm) -> String {
+    match algorithm {
+        CertificateAlgorithm::Ed25519 => "Ed25519".to_string(),
+        CertificateAlgorithm::RSA { key_size } => format!("RSA-{}", key_size),
+        CertificateAlgorithm::ECDSA { curve } => format!("ECDSA-{}", curve),
+    }
+}
 
 /// Sign a new certificate
 #[utoipa::path(
@@ -48,14 +58,31 @@ pub async fn create_certificate(
     // Convert API request to signer request
     let signer_request = SignerRequest {
         username: request.username.clone(),
+        algorithm: request.algorithm.clone(),
     };
+    
+    // Check if user already has an active certificate with the same algorithm
+    let db = get_db();
+    let cert_service = CertificateService::new(db.clone());
+    
+    let algorithm_string = algorithm_to_string(&request.algorithm);
+    
+    if let Some(existing_cert) = cert_service
+        .get_active_certificate_by_user_and_algorithm(&request.username, &algorithm_string)
+        .await?
+    {
+        return Err(AppError::BadRequest(format!(
+            "User {} already has an active {} certificate (ID: {}). Please revoke the existing certificate first.",
+            request.username, 
+            algorithm_string,
+            existing_cert.certificate_id
+        )));
+    }
     
     // Sign the certificate
     let issued_cert = signer.sign_certificate(&signer_request, None).await?;
     
-    // Store certificate in database
-    let db = get_db();
-    let cert_service = CertificateService::new(db.clone());
+    // Store certificate in database (reuse existing cert_service)
     
     let cert_uuid = Uuid::new_v4();
     let cert_record = CertificateRecord {

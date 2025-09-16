@@ -13,7 +13,7 @@ use crate::{routes::{ca::CaApi, certificate::CertificateApi}, state::AppState};
 #[openapi(
     nest(
         (path = "/ca", api = CaApi),
-        (path = "/certificates", api = CertificateApi),
+        (path = "/certificate", api = CertificateApi),
     ),
     paths(
         crate::handlers::health::health,
@@ -29,7 +29,7 @@ pub fn create_routes() -> Router<AppState> {
     Router::new()
         .merge(health::create_router())
         .nest("/ca", ca::create_router())
-        .nest("/certificates", certificate::create_router())
+        .nest("/certificate", certificate::create_router())
         .layer(cors)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", doc))
 }
