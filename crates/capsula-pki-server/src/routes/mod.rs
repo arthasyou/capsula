@@ -1,58 +1,35 @@
+mod ca;
+mod certificate;
+mod health;
+
 use axum::Router;
 use toolcraft_axum_kit::middleware::cors::create_cors;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::handlers::{ca, certificate, simple_ca};
-use crate::models::{ca::*, certificate::*};
+use crate::{routes::{ca::CaApi, certificate::CertificateApi}, state::AppState};
 
 #[derive(OpenApi)]
 #[openapi(
-    info(
-        title = "Capsula PKI Server API",
-        version = "1.0.0",
-        description = "Certificate Authority and PKI management API"
+    nest(
+        (path = "/ca", api = CaApi),
+        (path = "/certificate", api = CertificateApi),
     ),
     paths(
-        ca::get_ca_status,
-        ca::get_ca_certificate,
-        ca::initialize_ca,
-        ca::health_check,
-        certificate::create_certificate,
-        certificate::get_certificate,
-        certificate::list_certificates,
-        certificate::revoke_certificate,
+        crate::handlers::health::health,
+        crate::handlers::health::ca_status,
     ),
-    components(
-        schemas(
-            CaInfo,
-            CaInitRequest,
-            CaStatus,
-            CertificateRequest,
-            CertificateResponse,
-            CertificateStatus,
-            RevocationRequest,
-            RevocationReason,
-            CertificateListQuery,
-            CertificateListResponse,
-        )
-    ),
-    tags(
-        (name = "ca", description = "Certificate Authority management"),
-        (name = "certificates", description = "Certificate management"),
-        (name = "health", description = "Health check endpoints"),
-    )
 )]
 struct ApiDoc;
 
-pub fn create_routes() -> Router {
+pub fn create_routes() -> Router<AppState> {
     let cors = create_cors();
     let doc = ApiDoc::openapi();
 
     Router::new()
-        .merge(simple_ca::create_simple_router())
-        .merge(ca::create_router())
-        .merge(certificate::create_router())
+        .merge(health::create_router())
+        .nest("/ca", ca::create_router())
+        .nest("/certificate", certificate::create_router())
         .layer(cors)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", doc))
 }

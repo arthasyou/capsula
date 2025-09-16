@@ -1,9 +1,9 @@
 pub mod error_code;
 
 use axum::{
-    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
+    Json,
 };
 use serde_json::json;
 use thiserror::Error;
@@ -19,27 +19,36 @@ pub enum AppError {
     #[allow(clippy::enum_variant_names)]
     ValidationError(#[from] validator::ValidationErrors),
 
+    #[error("db error: {0}")]
+    DbError(#[from] surrealdb::Error),
+
+    #[error("io error: {0}")]
+    IoError(#[from] std::io::Error),
+
     #[error("not found: {0}")]
     NotFound(String),
     
+    #[error("bad request: {0}")]
+    BadRequest(String),
+
     #[error("PKI error: {0}")]
     PkiError(String),
-    
+
     #[error("internal error: {0}")]
     Internal(String),
 }
-
-// Keep the old Error type as alias for backward compatibility
-pub type Error = AppError;
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::ConfigError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::ValidationError(ref e) => (StatusCode::BAD_REQUEST, e.to_string()),
+            AppError::IoError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::NotFound(ref e) => (StatusCode::NOT_FOUND, e.to_string()),
+            AppError::BadRequest(ref e) => (StatusCode::BAD_REQUEST, e.to_string()),
             AppError::PkiError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::Internal(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            AppError::DbError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         };
 
         let body = Json(json!({
