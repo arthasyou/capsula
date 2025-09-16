@@ -1,13 +1,11 @@
 //! Certificate Authority management handlers
 
-use axum::{http::StatusCode, response::Json};
-use capsula_pki::keystore::{
-    FileSystemBackend, KeyGenerationConfig, KeyType, KeyUsage, KeystoreManager,
-};
+use axum::{extract::State, response::Json};
 
 use crate::{
     error::AppError,
-    models::ca::{CaInfo, CaInitRequest, CaStatus},
+    models::ca::{CaInfo, CaStatus},
+    state::AppState,
 };
 
 /// Get CA status and information
@@ -20,33 +18,37 @@ use crate::{
     ),
     tag = "CA"
 )]
-pub async fn get_ca_status() -> Result<Json<CaStatus>, AppError> {
+pub async fn get_ca_status(State(app_state): State<AppState>) -> Result<Json<CaStatus>, AppError> {
     tracing::info!("Getting CA status");
 
-    // TODO: Implement CA status check
-    // 1. Check if CA is initialized
-    // 2. Get CA certificate information
-    // 3. Get statistics from storage
+    let pki_manager = app_state.pki_manager.read().await;
+    let pki_status = pki_manager.get_ca_status();
 
-    // Placeholder response
-    let ca_info = CaInfo {
-        ca_certificate_pem: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
-            .to_string(),
-        subject: "CN=Capsula Root CA, O=Capsula PKI, C=US".to_string(),
-        serial_number: "1".to_string(),
-        not_before: chrono::Utc::now() - chrono::Duration::days(1),
-        not_after: chrono::Utc::now() + chrono::Duration::days(3650),
-        key_algorithm: "RSA".to_string(),
-        key_size: Some(4096),
-        created_at: chrono::Utc::now() - chrono::Duration::days(1),
+    let ca_info = if pki_status.pki_ready {
+        if let Some(root_cert) = pki_manager.get_root_ca_cert() {
+            Some(CaInfo {
+                ca_certificate_pem: root_cert.clone(),
+                subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+                serial_number: "1".to_string(),
+                not_before: chrono::Utc::now() - chrono::Duration::days(1),
+                not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
+                key_algorithm: "RSA".to_string(),
+                key_size: Some(2048),
+                created_at: chrono::Utc::now() - chrono::Duration::days(1),
+            })
+        } else {
+            None
+        }
+    } else {
+        None
     };
 
     let status = CaStatus {
-        initialized: true,
-        ca_info: Some(ca_info),
-        certificates_issued: 0,
-        active_certificates: 0,
-        revoked_certificates: 0,
+        initialized: pki_status.pki_ready,
+        ca_info,
+        certificates_issued: 0, // TODO: Get from database
+        active_certificates: 0, // TODO: Get from database
+        revoked_certificates: 0, // TODO: Get from database
     };
 
     Ok(Json(status))
@@ -63,113 +65,94 @@ pub async fn get_ca_status() -> Result<Json<CaStatus>, AppError> {
     ),
     tag = "CA"
 )]
-pub async fn get_ca_certificate() -> Result<Json<CaInfo>, AppError> {
+pub async fn get_ca_certificate(State(app_state): State<AppState>) -> Result<Json<CaInfo>, AppError> {
     tracing::info!("Getting CA certificate");
 
-    // TODO: Implement CA certificate retrieval
-
-    // Placeholder response
-    let ca_info = CaInfo {
-        ca_certificate_pem: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
-            .to_string(),
-        subject: "CN=Capsula Root CA, O=Capsula PKI, C=US".to_string(),
-        serial_number: "1".to_string(),
-        not_before: chrono::Utc::now() - chrono::Duration::days(1),
-        not_after: chrono::Utc::now() + chrono::Duration::days(3650),
-        key_algorithm: "RSA".to_string(),
-        key_size: Some(4096),
-        created_at: chrono::Utc::now() - chrono::Duration::days(1),
-    };
-
-    Ok(Json(ca_info))
+    let pki_manager = app_state.pki_manager.read().await;
+    
+    if let Some(root_cert) = pki_manager.get_root_ca_cert() {
+        let ca_info = CaInfo {
+            ca_certificate_pem: root_cert.clone(),
+            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+            serial_number: "1".to_string(),
+            not_before: chrono::Utc::now() - chrono::Duration::days(1),
+            not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
+            key_algorithm: "RSA".to_string(),
+            key_size: Some(2048),
+            created_at: chrono::Utc::now() - chrono::Duration::days(1),
+        };
+        
+        Ok(Json(ca_info))
+    } else {
+        Err(AppError::NotFound("CA not initialized or certificate not found".to_string()))
+    }
 }
 
-/// Initialize Certificate Authority
+/// Get Root CA certificate
 #[utoipa::path(
-    post,
-    path = "/initialize",
-    request_body = CaInitRequest,
+    get,
+    path = "/root",
     responses(
-        (status = 201, description = "CA initialized successfully", body = CaInfo),
-        (status = 400, description = "Bad request or CA already initialized"),
+        (status = 200, description = "Root CA certificate retrieved successfully", body = CaInfo),
+        (status = 404, description = "Root CA not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "CA"
 )]
-pub async fn initialize_ca(
-    Json(request): Json<CaInitRequest>,
-) -> Result<(StatusCode, Json<CaInfo>), AppError> {
-    tracing::info!("Initializing CA with CN: {}", request.common_name);
+pub async fn get_root_ca(State(app_state): State<AppState>) -> Result<Json<CaInfo>, AppError> {
+    tracing::info!("Getting Root CA certificate");
 
-    // Simple CA initialization
-    match simple_initialize_ca(&request).await {
-        Ok(ca_info) => Ok((StatusCode::CREATED, Json(ca_info))),
-        Err(e) => {
-            tracing::error!("CA initialization failed: {}", e);
-            Err(AppError::Internal("CA initialization failed".to_string()))
-        }
+    let pki_manager = app_state.pki_manager.read().await;
+    
+    if let Some(root_cert) = pki_manager.get_root_ca_cert() {
+        let ca_info = CaInfo {
+            ca_certificate_pem: root_cert.clone(),
+            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+            serial_number: "1".to_string(),
+            not_before: chrono::Utc::now() - chrono::Duration::days(1),
+            not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
+            key_algorithm: "RSA".to_string(),
+            key_size: Some(2048),
+            created_at: chrono::Utc::now() - chrono::Duration::days(1),
+        };
+        
+        Ok(Json(ca_info))
+    } else {
+        Err(AppError::NotFound("Root CA not found or PKI not initialized".to_string()))
     }
 }
 
-/// Simple CA initialization implementation
-async fn simple_initialize_ca(
-    request: &CaInitRequest,
-) -> Result<CaInfo, Box<dyn std::error::Error>> {
-    tracing::info!("Creating CA with basic PKI integration");
-
-    // 1. Create keystore manager
-    let storage_backend = Box::new(FileSystemBackend::new("./pki_data/keys")?);
-    let mut keystore_manager = KeystoreManager::new(storage_backend);
-
-    // 2. Generate CA key pair
-    let key_type = match request.key_algorithm.as_str() {
-        "RSA" => KeyType::RSA(request.key_size.unwrap_or(2048)),
-        "Ed25519" => KeyType::Ed25519,
-        _ => KeyType::Ed25519, // Default to Ed25519
-    };
-
-    let config = KeyGenerationConfig {
-        key_type,
-        usages: vec![KeyUsage::CertificateSigning, KeyUsage::CRLSigning],
-        use_hsm: false,
-        exportable: false, // CA key should not be exportable
-        label: Some("CA Root Key".to_string()),
-    };
-
-    let (ca_key_id, _ca_key) = keystore_manager.generate_key(config)?;
-    tracing::info!("Generated CA key with ID: {}", ca_key_id);
-
-    // 3. Create CA info (simplified without actual certificate generation)
-    let ca_info = CaInfo {
-        ca_certificate_pem: format!(
-            "-----BEGIN CERTIFICATE-----\nTEMPORARY_CA_CERT_FOR_KEY_{}\n-----END CERTIFICATE-----",
-            ca_key_id
-        ),
-        subject: format!(
-            "CN={}, O={}, C={}",
-            request.common_name, request.organization, request.country
-        ),
-        serial_number: "1".to_string(),
-        not_before: chrono::Utc::now(),
-        not_after: chrono::Utc::now() + chrono::Duration::days(request.validity_days as i64),
-        key_algorithm: request.key_algorithm.clone(),
-        key_size: request.key_size,
-        created_at: chrono::Utc::now(),
-    };
-
-    tracing::info!("CA initialized successfully");
-    Ok(ca_info)
-}
-
-/// Health check endpoint
+/// Get Intermediate CA certificate
 #[utoipa::path(
     get,
-    path = "/health",
+    path = "/intermediate",
     responses(
-        (status = 200, description = "Service is healthy"),
+        (status = 200, description = "Intermediate CA certificate retrieved successfully", body = CaInfo),
+        (status = 404, description = "Intermediate CA not found"),
+        (status = 500, description = "Internal server error")
     ),
-    tag = "health"
+    tag = "CA"
 )]
-pub async fn health_check() -> StatusCode {
-    StatusCode::OK
+pub async fn get_intermediate_ca(State(app_state): State<AppState>) -> Result<Json<CaInfo>, AppError> {
+    tracing::info!("Getting Intermediate CA certificate");
+
+    let pki_manager = app_state.pki_manager.read().await;
+    
+    if let Some(intermediate_cert) = pki_manager.get_intermediate_ca_cert() {
+        let ca_info = CaInfo {
+            ca_certificate_pem: intermediate_cert.clone(),
+            subject: "CN=Capsula Intermediate CA, O=Capsula PKI, OU=Intermediate CA, L=San Francisco, ST=California, C=US".to_string(),
+            serial_number: "2".to_string(),
+            not_before: chrono::Utc::now() - chrono::Duration::days(1),
+            not_after: chrono::Utc::now() + chrono::Duration::days(3650), // 10 years
+            key_algorithm: "RSA".to_string(),
+            key_size: Some(2048),
+            created_at: chrono::Utc::now() - chrono::Duration::days(1),
+        };
+        
+        Ok(Json(ca_info))
+    } else {
+        Err(AppError::NotFound("Intermediate CA not found or PKI not initialized".to_string()))
+    }
 }
+

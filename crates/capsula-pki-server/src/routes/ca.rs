@@ -1,18 +1,18 @@
 use axum::{
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use utoipa::OpenApi;
 
-use crate::handlers::ca::{get_ca_certificate, get_ca_status, health_check, initialize_ca};
+use crate::{handlers::ca::{get_ca_certificate, get_ca_status, get_root_ca, get_intermediate_ca}, state::AppState};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         crate::handlers::ca::get_ca_status,
         crate::handlers::ca::get_ca_certificate,
-        crate::handlers::ca::initialize_ca,
-        crate::handlers::ca::health_check,
+        crate::handlers::ca::get_root_ca,
+        crate::handlers::ca::get_intermediate_ca,
     ),
     tags(
         (name = "CA", description = "Certificate Authority APIs")
@@ -21,10 +21,10 @@ use crate::handlers::ca::{get_ca_certificate, get_ca_status, health_check, initi
 
 pub struct CaApi;
 
-pub fn create_router() -> Router {
+pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/status", get(get_ca_status))
         .route("/certificate", get(get_ca_certificate))
-        .route("/initialize", post(initialize_ca))
-        .route("/health", get(health_check))
+        .route("/root", get(get_root_ca))
+        .route("/intermediate", get(get_intermediate_ca))
 }

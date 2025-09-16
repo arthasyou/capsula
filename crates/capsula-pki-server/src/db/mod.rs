@@ -1,4 +1,5 @@
 pub mod user;
+pub mod certificate;
 
 use std::sync::LazyLock;
 
@@ -9,7 +10,10 @@ use surrealdb::{
     Surreal,
 };
 
-use crate::{db::user::create_users_table, error::Result};
+use crate::{
+    db::{user::create_users_table, certificate::CertificateService}, 
+    error::Result
+};
 
 /// Struct representing the Surrealdb configuration parameters.
 #[derive(Debug, Deserialize)]
@@ -42,5 +46,10 @@ pub fn get_db() -> &'static Surreal<Client> {
 
 pub async fn create_tables() -> Result<()> {
     create_users_table().await?;
+    
+    // Create certificate table
+    let cert_service = CertificateService::new(DB.clone());
+    cert_service.create_table().await?;
+    
     Ok(())
 }

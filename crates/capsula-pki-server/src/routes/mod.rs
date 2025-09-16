@@ -7,7 +7,7 @@ use toolcraft_axum_kit::middleware::cors::create_cors;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::routes::{ca::CaApi, certificate::CertificateApi};
+use crate::{routes::{ca::CaApi, certificate::CertificateApi}, state::AppState};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -15,10 +15,14 @@ use crate::routes::{ca::CaApi, certificate::CertificateApi};
         (path = "/ca", api = CaApi),
         (path = "/certificates", api = CertificateApi),
     ),
+    paths(
+        crate::handlers::health::health,
+        crate::handlers::health::ca_status,
+    ),
 )]
 struct ApiDoc;
 
-pub fn create_routes() -> Router {
+pub fn create_routes() -> Router<AppState> {
     let cors = create_cors();
     let doc = ApiDoc::openapi();
 

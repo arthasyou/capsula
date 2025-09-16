@@ -4,9 +4,9 @@ use axum::{
 };
 use utoipa::OpenApi;
 
-use crate::handlers::certificate::{
-    create_certificate, get_certificate, list_certificates, revoke_certificate,
-};
+use crate::{handlers::certificate::{
+    create_certificate, get_certificate, list_certificates, renew_certificate, revoke_certificate, get_user_certificates,
+}, state::AppState};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -14,7 +14,9 @@ use crate::handlers::certificate::{
         crate::handlers::certificate::create_certificate,
         crate::handlers::certificate::get_certificate,
         crate::handlers::certificate::list_certificates,
+        crate::handlers::certificate::renew_certificate,
         crate::handlers::certificate::revoke_certificate,
+        crate::handlers::certificate::get_user_certificates,
     ),
     tags(
         (name = "Certificate", description = "Certificate APIs")
@@ -23,10 +25,12 @@ use crate::handlers::certificate::{
 
 pub struct CertificateApi;
 
-pub fn create_router() -> Router {
+pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/create", post(create_certificate))
         .route("/get/{certificate_id}", get(get_certificate))
         .route("/list", get(list_certificates))
+        .route("/renew", post(renew_certificate))
         .route("/revoke/{certificate_id}", post(revoke_certificate))
+        .route("/users/{user_id}/certificates", get(get_user_certificates))
 }

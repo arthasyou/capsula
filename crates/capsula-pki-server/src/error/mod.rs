@@ -22,8 +22,14 @@ pub enum AppError {
     #[error("db error: {0}")]
     DbError(#[from] surrealdb::Error),
 
+    #[error("io error: {0}")]
+    IoError(#[from] std::io::Error),
+
     #[error("not found: {0}")]
     NotFound(String),
+    
+    #[error("bad request: {0}")]
+    BadRequest(String),
 
     #[error("PKI error: {0}")]
     PkiError(String),
@@ -37,7 +43,9 @@ impl IntoResponse for AppError {
         let (status, error_message) = match self {
             AppError::ConfigError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::ValidationError(ref e) => (StatusCode::BAD_REQUEST, e.to_string()),
+            AppError::IoError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::NotFound(ref e) => (StatusCode::NOT_FOUND, e.to_string()),
+            AppError::BadRequest(ref e) => (StatusCode::BAD_REQUEST, e.to_string()),
             AppError::PkiError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::Internal(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::DbError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
