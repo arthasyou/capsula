@@ -1,5 +1,5 @@
 [http]
-port = 19878
+port = 16021
 
 [jwt]
 audience = "test"
@@ -13,9 +13,24 @@ refresh_secret = "b26f570b5d72795815f898cea04a4234a932cded824081767698e58e13ff84
 [pki]
 # PKI data directory
 data_dir = "./pki_data"
-# CA storage path
-ca_storage_path = "./pki_data/ca"
-# Certificate storage path
-cert_storage_path = "./pki_data/certs"
-# Default certificate validity days
-default_validity_days = 3650
+
+# CA storage paths
+root_ca_path = "./pki_data/ca/root"
+intermediate_ca_path = "./pki_data/ca/intermediate"
+
+# PKI settings
+default_validity_days = 365
+root_ca_validity_days = 7300
+intermediate_ca_validity_days = 3650
+
+# Security settings
+min_key_size_rsa = 2048
+require_strong_passwords = false
+
+[surrealdb]
+host = "localhost"
+port = 8000
+username = "root"
+password = "root"
+namespace = "dev"
+database = "dev"
