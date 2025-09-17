@@ -12,7 +12,7 @@ use crate::{
     error::{AppError, Result},
     models::certificate::{
         CertificateAlgorithm, CertificateListQuery, CertificateListResponse, CertificateRecord, 
-        CertificateRequest, CertificateResponse, RenewalRequest, RevocationRequest, 
+        CertificateRequest, CertificateResponse, CertificateSummary, RenewalRequest, RevocationRequest, 
         UserCertificateQuery, UserCertificateListResponse,
     },
     state::AppState,
@@ -154,19 +154,18 @@ pub async fn get_certificate(
     }
 }
 
-/// List all certificates (admin endpoint)  
+/// List all certificates (admin endpoint) - returns lightweight summaries
 #[utoipa::path(
     get,
     path = "/list",
     params(CertificateListQuery),
     responses(
-        (status = 200, description = "Certificate list", body = CertificateListResponse),
+        (status = 200, description = "Certificate list with summaries", body = CertificateListResponse),
         (status = 500, description = "Internal server error")
     ),
     tag = "Certificate"
 )]
 pub async fn list_certificates(
-    State(app_state): State<AppState>,
     Query(query): Query<CertificateListQuery>,
 ) -> Result<Json<CertificateListResponse>> {
     let db = get_db();
@@ -179,17 +178,16 @@ pub async fn list_certificates(
         .list_certificates(query.status, Some(page), Some(limit))
         .await?;
     
-    let pki_manager = app_state.pki_manager.read().await;
-    let intermediate_ca_path = &pki_manager.config.intermediate_ca_path;
-    let cert_responses: Vec<CertificateResponse> = certificates
+    // Convert to lightweight summaries (no PEM data, no private keys)
+    let cert_summaries: Vec<CertificateSummary> = certificates
         .into_iter()
-        .map(|cert| convert_record_to_response(cert, intermediate_ca_path))
+        .map(convert_record_to_summary)
         .collect();
     
     let has_more = (page * limit) < total_count;
     
     let response = CertificateListResponse {
-        certificates: cert_responses,
+        certificates: cert_summaries,
         total_count,
         page,
         limit,
@@ -344,6 +342,21 @@ fn convert_record_to_response(record: CertificateRecord, intermediate_ca_path: &
         not_before: chrono::DateTime::<chrono::Utc>::from_timestamp(record.not_before, 0).unwrap_or_default(),
         not_after: chrono::DateTime::<chrono::Utc>::from_timestamp(record.not_after, 0).unwrap_or_default(),
         status: record.status,
+        created_at: chrono::DateTime::<chrono::Utc>::from_timestamp(record.created_at, 0).unwrap_or_default(),
+    }
+}
+
+/// Convert database record to lightweight certificate summary
+fn convert_record_to_summary(record: CertificateRecord) -> CertificateSummary {
+    CertificateSummary {
+        certificate_id: Uuid::parse_str(&record.certificate_id).unwrap_or_else(|_| Uuid::new_v4()),
+        user_id: record.user_id,
+        serial_number: record.serial_number,
+        common_name: record.common_name,
+        status: record.status,
+        key_algorithm: record.key_algorithm,
+        not_before: chrono::DateTime::<chrono::Utc>::from_timestamp(record.not_before, 0).unwrap_or_default(),
+        not_after: chrono::DateTime::<chrono::Utc>::from_timestamp(record.not_after, 0).unwrap_or_default(),
         created_at: chrono::DateTime::<chrono::Utc>::from_timestamp(record.created_at, 0).unwrap_or_default(),
     }
 }
