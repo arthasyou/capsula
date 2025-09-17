@@ -3,9 +3,10 @@
 //! This module defines the core Key trait that provides a unified interface
 //! for different cryptographic key implementations.
 
+use std::str::FromStr;
+
 use pkcs8::spki::AlgorithmIdentifierOwned;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
 use crate::error::{Error, Result};
 
@@ -430,6 +431,14 @@ impl KeyExportInfo {
 
     /// 按字符串类型查找公钥文件路径（向后兼容）
     pub fn find_public_key_path_by_str(&self, key_type_str: &str) -> Option<&str> {
-        key_type_str.parse().ok().and_then(|key_type| self.find_public_key_path(key_type))
+        key_type_str
+            .parse()
+            .ok()
+            .and_then(|key_type| self.find_public_key_path(key_type))
     }
 }
+
+// ============================================================================
+
+pub trait SigningKey: Key + KeySign + Send + Sync {}
+impl<T: Key + KeySign + Send + Sync> SigningKey for T {}
