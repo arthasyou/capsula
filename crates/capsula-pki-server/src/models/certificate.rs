@@ -147,10 +147,41 @@ pub struct CertificateListQuery {
     pub limit: Option<u32>,
 }
 
+/// Certificate summary for list operations (lightweight)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CertificateSummary {
+    /// Certificate ID
+    pub certificate_id: Uuid,
+
+    /// User ID
+    pub user_id: String,
+
+    /// Certificate serial number
+    pub serial_number: String,
+
+    /// Certificate common name  
+    pub common_name: String,
+
+    /// Certificate status
+    pub status: CertificateStatus,
+
+    /// Key algorithm
+    pub key_algorithm: String,
+
+    /// Not valid before
+    pub not_before: DateTime<Utc>,
+
+    /// Not valid after
+    pub not_after: DateTime<Utc>,
+
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+}
+
 /// Certificate list response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CertificateListResponse {
-    pub certificates: Vec<CertificateResponse>,
+    pub certificates: Vec<CertificateSummary>,
     pub total_count: u32,
     pub page: u32,
     pub limit: u32,
