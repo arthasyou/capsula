@@ -9,13 +9,13 @@ use crate::{
 /// 1阶数据胶囊 - 对原始报告的安全封装
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capsula1 {
-    pub header: Header,
-    pub meta: Meta,
-    pub payload: Payload, // ← 原始报告（0阶数据）加密后放在这里
-    pub policy: Policy,
-    pub integrity: Integrity,
+    pub header: Header,       // ← 胶囊头（版本、类型、时间戳等）
+    pub meta: Meta,           // ← 元数据（0阶数据的摘要等）
+    pub payload: Payload,     // ← 原始报告（0阶数据）加密后放在这里
+    pub policy: Policy,       // ← 使用策略（X.509要求、OPA策略等）
+    pub integrity: Integrity, // ← 对整个胶囊的签名
     #[serde(default)]
-    pub audit: Vec<AuditEvent>,
+    pub audit: Vec<AuditEvent>, // 审计日志（考虑放在外部不要封装在胶囊里面）
     #[serde(default)]
     pub keyring: Keyring, // 传输时的密钥包装
 }

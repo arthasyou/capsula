@@ -442,3 +442,6 @@ impl KeyExportInfo {
 
 pub trait SigningKey: Key + KeySign + Send + Sync {}
 impl<T: Key + KeySign + Send + Sync> SigningKey for T {}
+
+pub trait SigningAndKeyAgreementKey: Key + KeySign + KeyAgree + Send + Sync {}
+impl<T: Key + KeySign + KeyAgree + Send + Sync> SigningAndKeyAgreementKey for T {}

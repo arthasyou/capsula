@@ -3,7 +3,7 @@ use capsula_crypto::Rsa;
 use pkcs8::spki::AlgorithmIdentifierOwned;
 
 use super::{
-    Algorithm, ExportablePrivateKey, Key, KeyCapabilities, KeyExportInfo, KeyFileIO, KeySign,
+    Algorithm, ExportablePrivateKey, Key, KeyCapabilities, KeyEncDec, KeyExportInfo, KeyFileIO, KeySign,
     KeyUsage, PublicKeyExportInfo, PublicKeySet,
 };
 use crate::error::{Error, Result};
@@ -137,6 +137,33 @@ impl KeySign for RsaKey {
         // RSA with SHA-256 signature algorithm OID
         AlgorithmIdentifierOwned {
             oid: const_oid::db::rfc5912::SHA_256_WITH_RSA_ENCRYPTION,
+            parameters: None,
+        }
+    }
+}
+
+// ============================================================================
+// KeyEncDec Trait Implementation  
+// ============================================================================
+
+impl KeyEncDec for RsaKey {
+    /// Encrypt data using RSA public key with PKCS1v15 padding
+    fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        let public_key = self.inner.public_key();
+        capsula_crypto::asymmetric::rsa::encrypt(&public_key, plaintext)
+            .map_err(|e| Error::CryptoError(e))
+    }
+    
+    /// Decrypt data using RSA private key with PKCS1v15 padding
+    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        self.inner.decrypt(ciphertext)
+            .map_err(|e| Error::CryptoError(e))
+    }
+    
+    /// Get encryption algorithm identifier for RSA-PKCS1v15
+    fn encryption_algorithm_id(&self) -> AlgorithmIdentifierOwned {
+        AlgorithmIdentifierOwned {
+            oid: const_oid::db::rfc5912::RSA_ENCRYPTION,
             parameters: None,
         }
     }
