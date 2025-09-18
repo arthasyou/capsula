@@ -2,7 +2,7 @@ use capsula_crypto::{
     base64, decrypt_aead, encrypt_aead, encrypt_dek_with_algorithm, generate_id, generate_key,
     generate_nonce, parse_algorithm_from_spki, sha256_hex,
 };
-use capsula_key::key::{Key, SigningKey};
+use capsula_key::key::SigningKey;
 use pkcs8::{der::Decode, spki::SubjectPublicKeyInfoRef};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -66,13 +66,13 @@ pub struct SealedBlock {
 
 impl SealedBlock {
     /// 封装数据：把明文加密并签名，生成一个 SealedBlock
-    pub fn seal(
-        plaintext: &[u8],             // 明文字节
-        content_type: ContentType,    // 明文类型 (MIME)
-        aad: &[u8],                   // 额外认证数据（外层上下文）
-        keyring: &mut Keyring,        // 密钥环用于存储加密的DEK
-        recipient_public_key: &[u8],  // 所有者公钥（SPKI DER格式）
-        signing_key: &dyn SigningKey, // 作者私钥（用于签名）
+    pub fn seal<S: SigningKey>(
+        plaintext: &[u8],            // 明文字节
+        content_type: ContentType,   // 明文类型 (MIME)
+        aad: &[u8],                  // 额外认证数据（外层上下文）
+        keyring: &mut Keyring,       // 密钥环用于存储加密的DEK
+        recipient_public_key: &[u8], // 所有者公钥（SPKI DER格式）
+        signing_key: &S,             // 作者私钥（用于签名）
     ) -> Result<(Self, String)> {
         // 1. 生成 DEK 和 DEK ID
         let dek = generate_key();
@@ -158,12 +158,25 @@ impl SealedBlock {
         ))
     }
 
-    /// 解封数据：解密并验证签名，返回明文
-    pub fn unseal(
+    /// 解封数据：从keyring解密DEK，然后解密数据，返回明文
+    pub fn unseal<T: capsula_key::key::KeyEncDec>(
         &self,
-        dek: &[u8], // 已经解包的数据加密密钥
+        keyring: &Keyring,
+        decryption_key: &T,
     ) -> Result<Vec<u8>> {
-        // 1. 解码 nonce 和 AAD
+        // 1. 从keyring获取加密的DEK
+        let key_wrap = keyring.get(&self.block.dek_id).ok_or_else(|| {
+            Error::DataError(format!("DEK not found in keyring: {}", self.block.dek_id))
+        })?;
+
+        // 2. 解码base64编码的加密DEK
+        let encrypted_dek = base64::decode(&key_wrap.cek_wrapped)
+            .map_err(|e| Error::DataError(format!("Failed to decode encrypted DEK: {}", e)))?;
+
+        // 3. 使用私钥解密DEK
+        let dek = decryption_key.decrypt(&encrypted_dek)?;
+
+        // 4. 解码 nonce 和 AAD
         let nonce_vec = base64::decode(&self.block.nonce)
             .map_err(|e| Error::DataError(format!("Base64 decode error: {}", e)))?;
         let aad = base64::decode(&self.block.aad)
@@ -176,16 +189,16 @@ impl SealedBlock {
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes.copy_from_slice(&nonce_vec);
 
-        // 2. 解密数据
-        let plaintext = decrypt_aead(&self.block.ct, dek, &nonce_bytes, &aad)
+        // 5. 解密数据
+        let plaintext = decrypt_aead(&self.block.ct, &dek, &nonce_bytes, &aad)
             .map_err(|e| Error::DataError(format!("Decryption failed: {}", e)))?;
 
-        // 3. 验证长度
+        // 6. 验证长度
         if plaintext.len() != self.block.len as usize {
             return Err(Error::DataError("Decrypted length mismatch".to_string()));
         }
 
-        // 4. 验证摘要
+        // 7. 验证摘要
         let computed_digest = Self::compute_digest(&plaintext)?;
         if computed_digest.hash != self.proof.subject.hash {
             return Err(Error::IntegrityError(
@@ -193,13 +206,11 @@ impl SealedBlock {
             ));
         }
 
-        // 5. TODO: 验证签名 - 需要获取签名者的公钥
+        // 8. TODO: 验证签名 - 需要获取签名者的公钥
         // 这里暂时跳过签名验证，在实际应用中需要从证书存储或PKI中获取公钥
 
         Ok(plaintext)
     }
-
-
 
     /// 计算公钥ID（使用公钥的SHA-256哈希）
     fn compute_public_key_id(public_key: &[u8]) -> Result<String> {
@@ -229,7 +240,7 @@ impl SealedBlock {
 
 #[cfg(test)]
 mod tests {
-    use capsula_key::{Key, KeyEncDec, RsaKey};
+    use capsula_key::{Key, RsaKey};
 
     use super::*;
     use crate::ContentType;
@@ -273,16 +284,8 @@ mod tests {
         assert!(keyring.contains_key(&dek_id));
         assert_eq!(keyring.len(), 1);
 
-        // Decrypt DEK from keyring using recipient's private key
-        let key_wrap = keyring.get(&dek_id).unwrap();
-        let encrypted_dek_bytes = base64::decode(&key_wrap.cek_wrapped)
-            .map_err(|e| Error::DataError(format!("Base64 decode failed: {}", e)))?;
-
-        // Decrypt the DEK using RSA private key
-        let dek = recipient_key.decrypt(&encrypted_dek_bytes)?;
-
-        // Unseal the block
-        let decrypted = sealed_block.unseal(&dek)?;
+        // Unseal the block using the recipient's private key and keyring
+        let decrypted = sealed_block.unseal(&keyring, &recipient_key)?;
 
         // Verify round trip
         assert_eq!(decrypted, plaintext);
@@ -343,9 +346,9 @@ mod tests {
             &signing_key,
         )?;
 
-        // Try to unseal with a different DEK
-        let wrong_dek = generate_key();
-        let result = sealed_block.unseal(&wrong_dek);
+        // Try to unseal with a different key (this should fail when the wrong key tries to decrypt)
+        let wrong_key = RsaKey::generate_2048()?;
+        let result = sealed_block.unseal(&keyring, &wrong_key);
 
         // Should fail
         assert!(result.is_err());
