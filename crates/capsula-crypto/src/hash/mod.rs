@@ -1,8 +1,10 @@
-//! Cryptographic hash functions
+//! Cryptographic hash functions and encoding utilities
 //!
 //! This module provides cryptographic hash functions for data integrity
 //! and key derivation purposes, including SHA-256 and SHA-512.
+//! It also includes Base64 encoding utilities.
 
+pub mod base64;
 pub mod sha;
 
 // Re-export the hash algorithm enum

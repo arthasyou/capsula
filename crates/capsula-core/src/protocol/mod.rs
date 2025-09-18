@@ -3,7 +3,6 @@ pub mod base;
 pub mod block;
 pub mod capsule;
 pub mod header;
-pub mod keyring;
 pub mod meta;
 pub mod policy;
 pub mod types;

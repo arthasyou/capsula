@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::protocol::types::{CapsulaGranted, CapsulaStage};
+use crate::{
+    protocol::types::{CapsulaGranted, CapsulaStage},
+    Keyring,
+};
 
 /// 1阶数据胶囊 - 对原始报告的安全封装
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,7 +17,7 @@ pub struct Capsula1 {
     #[serde(default)]
     pub audit: Vec<AuditEvent>,
     #[serde(default)]
-    pub keyring: Vec<KeyWrap>, // 传输时的密钥包装
+    pub keyring: Keyring, // 传输时的密钥包装
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

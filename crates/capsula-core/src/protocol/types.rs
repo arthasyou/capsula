@@ -15,7 +15,7 @@ pub enum CapsulaGranted {
     Execute,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EncAlg {
     #[serde(rename = "AES-256-GCM")]
     Aes256Gcm,
@@ -23,7 +23,7 @@ pub enum EncAlg {
     ChaCha20Poly1305,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContentType {
     #[serde(rename = "application/json")]
     Json,

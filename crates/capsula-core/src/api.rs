@@ -272,7 +272,7 @@ mod tests {
         let data = b"Secret medical data for testing!".to_vec();
         let producer_key = RsaKey::generate_2048().unwrap();
         let recipient_key = RsaKey::generate_2048().unwrap();
-        
+
         let recipients = vec![("doctor123".to_string(), &recipient_key as &dyn Key)];
 
         // 1. Encapsulate
@@ -283,7 +283,8 @@ mod tests {
             "Patient 001".to_string(),
             &producer_key,
             &recipients,
-        ).unwrap();
+        )
+        .unwrap();
 
         // 2. Decapsulate
         let result = CapsulaApi::decapsulate_simple_rsa(
@@ -291,7 +292,8 @@ mod tests {
             recipient_key,
             "doctor123".to_string(),
             None, // No producer public key for now
-        ).unwrap();
+        )
+        .unwrap();
 
         // 3. Verify
         assert_eq!(result.data, data);

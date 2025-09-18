@@ -14,12 +14,16 @@ pub mod kdf;
 pub mod symmetric;
 
 // Re-export commonly used types for convenience
-pub use asymmetric::{ed25519::Ed25519, p256::P256, rsa::Rsa, x25519::X25519, verify_signature};
+
+pub use asymmetric::{ed25519::Ed25519, p256::P256, rsa::Rsa, verify_signature, x25519::X25519};
 pub use hash::{
-    hash, hash_hex, verify, HashAlgorithm,
-    sha256, sha256_hex, sha256_verify, 
-    sha512, sha512_hex, sha512_verify,
-    quick_hash, quick_hash_hex
+    base64,
+    hash, hash_hex, quick_hash, quick_hash_hex, sha256, sha256_hex, sha256_verify, sha512,
+    sha512_hex, sha512_verify, verify, HashAlgorithm,
 };
 pub use kdf::{derive_key32, derive_many};
-pub use symmetric::{aes::Aes, chacha::ChaCha};
+pub use symmetric::{
+    aead::{decrypt_aead, encrypt_aead, generate_key, generate_nonce, generate_id, AeadCipher},
+    aes::Aes,
+    chacha::ChaCha,
+};

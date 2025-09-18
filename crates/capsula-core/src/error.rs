@@ -49,10 +49,6 @@ pub enum CoreError {
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
-    /// Base64编解码错误
-    #[error("Base64 error: {0}")]
-    Base64Error(#[from] base64::DecodeError),
-
     /// 时间解析错误
     #[error("Time error: {0}")]
     TimeError(#[from] time::error::Parse),
