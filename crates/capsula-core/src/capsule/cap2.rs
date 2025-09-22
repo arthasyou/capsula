@@ -235,34 +235,6 @@ impl Cap2 {
         }
     }
 
-    /// 获取2阶胶囊的摘要信息
-    pub fn get_summary(&self) -> Cap2Summary {
-        let report_types = self.get_report_types();
-        let total_capsules = self.count_total_capsules();
-        
-        let earliest_date = self.refs
-            .iter()
-            .filter_map(|r| r.metadata.as_ref()?.earliest_date.as_ref())
-            .min()
-            .cloned();
-            
-        let latest_date = self.refs
-            .iter()
-            .filter_map(|r| r.metadata.as_ref()?.latest_date.as_ref())
-            .max()
-            .cloned();
-
-        Cap2Summary {
-            owner_id: self.owner_id.clone(),
-            report_types,
-            total_capsules,
-            ref_entries_count: self.refs.len(),
-            earliest_date,
-            latest_date,
-            bundle_hash_alg: self.bundle_hash.alg.clone(),
-            signature_alg: self.bundle_signature.alg.clone(),
-        }
-    }
 }
 
 impl RefEntry {
@@ -346,33 +318,6 @@ impl RefMetadata {
     }
 }
 
-/// 2阶数据胶囊的摘要信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Cap2Summary {
-    /// 所有者ID
-    pub owner_id: String,
-    
-    /// 报告类型列表
-    pub report_types: Vec<String>,
-    
-    /// 总胶囊数量
-    pub total_capsules: usize,
-    
-    /// 引用条目数量
-    pub ref_entries_count: usize,
-    
-    /// 最早的胶囊时间
-    pub earliest_date: Option<String>,
-    
-    /// 最新的胶囊时间
-    pub latest_date: Option<String>,
-    
-    /// Bundle哈希算法
-    pub bundle_hash_alg: String,
-    
-    /// 签名算法
-    pub signature_alg: String,
-}
 
 #[cfg(test)]
 mod tests {
@@ -595,13 +540,11 @@ mod tests {
             create_test_signature(),
         );
 
-        let summary = cap2.get_summary();
-        assert_eq!(summary.owner_id, "owner1");
-        assert_eq!(summary.total_capsules, 2);
-        assert_eq!(summary.ref_entries_count, 1);
-        assert_eq!(summary.report_types, vec!["类型A".to_string()]);
-        assert_eq!(summary.earliest_date, Some("2025-09-01T00:00:00Z".to_string()));
-        assert_eq!(summary.latest_date, Some("2025-09-15T00:00:00Z".to_string()));
+        // 验证基本属性
+        assert_eq!(cap2.get_owner_id(), "owner1");
+        assert_eq!(cap2.get_report_types(), vec!["类型A".to_string()]);
+        assert_eq!(cap2.refs.len(), 1);
+        assert_eq!(cap2.count_total_capsules(), 2);
     }
 
     #[test]

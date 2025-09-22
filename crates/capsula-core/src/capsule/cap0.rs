@@ -80,44 +80,8 @@ impl Cap0 {
         Ok(true) // 临时返回，待实现具体验证逻辑
     }
 
-    /// 获取0阶胶囊的摘要信息
-    /// 
-    /// 返回用于索引和检索的基本信息，不包含敏感数据
-    pub fn get_summary(&self) -> Cap0Summary {
-        Cap0Summary {
-            origin_content_type: self.origin.content_type.clone(),
-            origin_size: self.origin.ciphertext.len,
-            has_text_version: self.has_text_version(),
-            text_content_type: self.origin_text.as_ref().map(|t| t.content_type.clone()),
-            text_size: self.origin_text.as_ref().map(|t| t.ciphertext.len),
-            created_at: self.origin.proof.issued_at.clone(),
-        }
-    }
 }
 
-/// 0阶数据胶囊的摘要信息
-/// 
-/// 用于索引和检索，不包含敏感的密文数据
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Cap0Summary {
-    /// 原始数据的内容类型
-    pub origin_content_type: crate::ContentType,
-    
-    /// 原始数据的大小（字节）
-    pub origin_size: u64,
-    
-    /// 是否包含文字注释版本
-    pub has_text_version: bool,
-    
-    /// 文字注释的内容类型（如果存在）
-    pub text_content_type: Option<crate::ContentType>,
-    
-    /// 文字注释的大小（如果存在）
-    pub text_size: Option<u64>,
-    
-    /// 创建时间
-    pub created_at: Option<String>,
-}
 
 #[cfg(test)]
 mod tests {
@@ -172,14 +136,6 @@ mod tests {
         assert!(cap0.has_text_version());
         assert_eq!(cap0.get_origin_text().unwrap().content_type, ContentType::Json);
 
-        // 验证摘要信息
-        let summary = cap0.get_summary();
-        assert_eq!(summary.origin_content_type, ContentType::Png);
-        assert_eq!(summary.origin_size, origin_data.len() as u64);
-        assert!(summary.has_text_version);
-        assert_eq!(summary.text_content_type, Some(ContentType::Json));
-        assert_eq!(summary.text_size, Some(text_data.len() as u64));
-
         Ok(())
     }
 
@@ -214,12 +170,6 @@ mod tests {
         // 验证基本属性
         assert!(!cap0.has_text_version());
         assert!(cap0.get_origin_text().is_none());
-
-        // 验证摘要信息
-        let summary = cap0.get_summary();
-        assert!(!summary.has_text_version);
-        assert!(summary.text_content_type.is_none());
-        assert!(summary.text_size.is_none());
 
         Ok(())
     }

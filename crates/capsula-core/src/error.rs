@@ -57,6 +57,10 @@ pub enum CoreError {
     #[error("Data error: {0}")]
     DataError(String),
 
+    /// 状态错误
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+
     /// 其他错误
     #[error("Other error: {0}")]
     Other(String),

@@ -29,13 +29,14 @@ pub struct Cap1 {
     /// 注意：使用者、授权向量、期限等可能存储在外层策略中
     pub meta: SealedBlock,
 
-    /// 数据摘要的加密密文
-    /// 包含从原始数据提取的结构化摘要：
-    /// - BNF解析后的JSON格式数据
-    /// - 关键字段和指标
-    /// - 标准化的医疗/业务术语
-    /// 这部分数据为ZKP证明提供基础
-    pub summary: SealedBlock,
+    /// BNF语法解析提取的结构化内容（加密密文）
+    /// 包含从原始数据通过BNF语法规则提取并转换的结构化内容：
+    /// - BNF解析器处理后的JSON格式数据
+    /// - 关键字段和指标的标准化表示
+    /// - 标准化的医疗/业务术语和数值
+    /// - 这是1阶胶囊的核心价值：将非结构化数据转为可理解的结构化数据
+    /// 这部分数据为ZKP证明和业务应用提供基础
+    pub bnf_extract: SealedBlock,
 
     /// 零知识证明（可选，暂未实现）
     /// 用于证明摘要中的特定片段确实来自原始数据
@@ -82,13 +83,13 @@ impl Cap1 {
     pub fn new(
         cap0_id: String,
         meta: SealedBlock,
-        summary: SealedBlock,
+        bnf_extract: SealedBlock,
         zkp: Option<ZkpProof>,
     ) -> Self {
         Self {
             cap0_id,
             meta,
-            summary,
+            bnf_extract,
             zkp,
         }
     }
@@ -103,9 +104,9 @@ impl Cap1 {
         &self.meta
     }
 
-    /// 获取摘要封装块的引用
-    pub fn get_summary(&self) -> &SealedBlock {
-        &self.summary
+    /// 获取BNF解析提取内容封装块的引用
+    pub fn get_bnf_extract(&self) -> &SealedBlock {
+        &self.bnf_extract
     }
 
     /// 获取ZKP证明的引用（如果存在）
@@ -160,8 +161,8 @@ impl Cap1 {
             cap0_id: self.cap0_id.clone(),
             meta_content_type: self.meta.content_type.clone(),
             meta_size: self.meta.ciphertext.len,
-            summary_content_type: self.summary.content_type.clone(),
-            summary_size: self.summary.ciphertext.len,
+            bnf_extract_content_type: self.bnf_extract.content_type.clone(),
+            bnf_extract_size: self.bnf_extract.ciphertext.len,
             has_zkp_proof: self.has_zkp_proof(),
             zkp_claim: self.zkp.as_ref().map(|z| z.claim.clone()),
             created_at: self.meta.proof.issued_at.clone(),
@@ -183,11 +184,11 @@ pub struct Cap1Summary {
     /// 元数据的大小（字节）
     pub meta_size: u64,
     
-    /// 摘要数据的内容类型
-    pub summary_content_type: crate::ContentType,
+    /// BNF提取数据的内容类型
+    pub bnf_extract_content_type: crate::ContentType,
     
-    /// 摘要数据的大小（字节）
-    pub summary_size: u64,
+    /// BNF提取数据的大小（字节）
+    pub bnf_extract_size: u64,
     
     /// 是否包含ZKP证明
     pub has_zkp_proof: bool,
@@ -265,12 +266,12 @@ mod tests {
             &signing_key,
         )?;
 
-        // 创建摘要封装块
-        let summary_data = br#"{"exam_type": "chest_xray", "result": "normal", "findings": [], "abnormalities": false}"#;
-        let (summary_block, _) = SealedBlock::seal(
-            summary_data,
+        // 创建BNF解析提取的结构化内容封装块
+        let bnf_extract_data = br#"{"exam_type": "chest_xray", "result": "normal", "findings": [], "abnormalities": false}"#;
+        let (bnf_extract_block, _) = SealedBlock::seal(
+            bnf_extract_data,
             ContentType::Json,
-            b"summary_aad",
+            b"bnf_extract_aad",
             &mut keyring,
             &recipient_public_key_spki,
             &signing_key,
@@ -288,14 +289,14 @@ mod tests {
         let cap1 = Cap1::new(
             "cap0_test_id_123".to_string(),
             meta_block,
-            summary_block,
+            bnf_extract_block,
             Some(zkp),
         );
 
         // 验证基本属性
         assert_eq!(cap1.get_cap0_id(), "cap0_test_id_123");
         assert_eq!(cap1.get_meta().content_type, ContentType::Json);
-        assert_eq!(cap1.get_summary().content_type, ContentType::Json);
+        assert_eq!(cap1.get_bnf_extract().content_type, ContentType::Json);
         assert!(cap1.has_zkp_proof());
         assert_eq!(cap1.get_zkp().unwrap().claim, "abnormalities == false");
 
@@ -303,7 +304,7 @@ mod tests {
         let summary = cap1.get_summary_info();
         assert_eq!(summary.cap0_id, "cap0_test_id_123");
         assert_eq!(summary.meta_content_type, ContentType::Json);
-        assert_eq!(summary.summary_content_type, ContentType::Json);
+        assert_eq!(summary.bnf_extract_content_type, ContentType::Json);
         assert!(summary.has_zkp_proof);
         assert_eq!(summary.zkp_claim, Some("abnormalities == false".to_string()));
 
@@ -335,11 +336,11 @@ mod tests {
             &signing_key,
         )?;
 
-        let summary_data = b"Basic summary data";
-        let (summary_block, _) = SealedBlock::seal(
-            summary_data,
+        let bnf_extract_data = b"Basic BNF extract data";
+        let (bnf_extract_block, _) = SealedBlock::seal(
+            bnf_extract_data,
             ContentType::Text,
-            b"summary_aad",
+            b"bnf_extract_aad",
             &mut keyring,
             &recipient_public_key_spki,
             &signing_key,
@@ -349,7 +350,7 @@ mod tests {
         let cap1 = Cap1::new(
             "cap0_test_id_456".to_string(),
             meta_block,
-            summary_block,
+            bnf_extract_block,
             None,
         );
 
@@ -409,11 +410,11 @@ mod tests {
             &signing_key,
         )?;
 
-        let summary_data = b"Test summary";
-        let (summary_block, _) = SealedBlock::seal(
-            summary_data,
+        let bnf_extract_data = b"Test BNF extract";
+        let (bnf_extract_block, _) = SealedBlock::seal(
+            bnf_extract_data,
             ContentType::Text,
-            b"summary_aad",
+            b"bnf_extract_aad",
             &mut keyring,
             &recipient_public_key_spki,
             &signing_key,
@@ -422,7 +423,7 @@ mod tests {
         let cap1 = Cap1::new(
             "test_cap0_id".to_string(),
             meta_block,
-            summary_block,
+            bnf_extract_block,
             None,
         );
 
@@ -433,7 +434,7 @@ mod tests {
         // 验证反序列化后的数据
         assert_eq!(cap1.get_cap0_id(), deserialized.get_cap0_id());
         assert_eq!(cap1.get_meta().content_type, deserialized.get_meta().content_type);
-        assert_eq!(cap1.get_summary().content_type, deserialized.get_summary().content_type);
+        assert_eq!(cap1.get_bnf_extract().content_type, deserialized.get_bnf_extract().content_type);
         assert_eq!(cap1.has_zkp_proof(), deserialized.has_zkp_proof());
 
         Ok(())
