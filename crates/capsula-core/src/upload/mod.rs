@@ -410,6 +410,7 @@ impl UploadTaskManager {
 mod tests {
     use super::*;
     use crate::state::UploadMeta;
+    use std::collections::HashMap;
 
     fn create_test_pending_state() -> CapsuleState {
         CapsuleState::Pending {
@@ -418,6 +419,28 @@ mod tests {
             content_hash: "test-hash".to_string(),
             ciphertext_len: 4,
             created_at: "2023-10-01T00:00:00Z".to_string(),
+        }
+    }
+    
+    fn create_test_upload_task(task_id: &str, priority: UploadPriority) -> UploadTask {
+        UploadTask {
+            task_id: task_id.to_string(),
+            capsule_id: format!("capsule-{}", task_id),
+            target_uri: format!("s3://test-bucket/{}", task_id),
+            ciphertext_data: vec![1, 2, 3, 4],
+            content_hash: "test-hash".to_string(),
+            content_type: "application/octet-stream".to_string(),
+            upload_meta: UploadMeta {
+                backend_type: "S3".to_string(),
+                bucket: Some("test-bucket".to_string()),
+                config: HashMap::new(),
+            },
+            state: UploadTaskState::Queued { 
+                priority,
+                retry_count: 0,
+            },
+            created_at: "2023-10-01T00:00:00Z".to_string(),
+            updated_at: "2023-10-01T00:00:00Z".to_string(),
         }
     }
 
@@ -489,7 +512,19 @@ mod tests {
     fn test_priority_queue() {
         let mut manager = UploadTaskManager::new();
         
-        // Create tasks with different priorities
+        // Create actual tasks with different priorities
+        let task_low = create_test_upload_task("low", UploadPriority::Low);
+        let task_high = create_test_upload_task("high", UploadPriority::High);
+        let task_normal = create_test_upload_task("normal", UploadPriority::Normal);
+        let task_critical = create_test_upload_task("critical", UploadPriority::Critical);
+        
+        // Add tasks to manager
+        manager.tasks.insert("low".to_string(), task_low);
+        manager.tasks.insert("high".to_string(), task_high);
+        manager.tasks.insert("normal".to_string(), task_normal);
+        manager.tasks.insert("critical".to_string(), task_critical);
+        
+        // Add to queue in order we want to test
         manager.add_task_to_queue("low", &UploadPriority::Low);
         manager.add_task_to_queue("high", &UploadPriority::High);
         manager.add_task_to_queue("normal", &UploadPriority::Normal);
