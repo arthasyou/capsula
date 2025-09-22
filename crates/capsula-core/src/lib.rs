@@ -12,6 +12,7 @@ pub mod types;
 // pub use api::{create_medical_capsule, decrypt_medical_capsule_rsa, CapsulaApi};
 // pub use decapsulator::{CapsuleDecryptor, DecapsulationResult, VerificationInfo};
 // pub use encapsulator::CapsulaBuilder;
+pub use capsule::{Cap0, Cap0Summary, Cap1, Cap1Summary, ZkpProof, Cap2, Cap2Summary, RefEntry, RefMetadata};
 pub use error::{CoreError, Result};
 pub use keyring::{KeyWrap, Keyring};
 pub use state::{CapsuleState, StateTransitionError, UploadMeta, UploadVerification};

@@ -8,6 +8,14 @@ use crate::{
 
 pub mod header;
 pub mod meta;
+pub mod cap0;
+pub mod cap1;
+pub mod cap2;
+
+// Re-export commonly used types
+pub use cap0::{Cap0, Cap0Summary};
+pub use cap1::{Cap1, Cap1Summary, ZkpProof};
+pub use cap2::{Cap2, Cap2Summary, RefEntry, RefMetadata};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capsula {
