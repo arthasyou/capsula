@@ -5,6 +5,7 @@ pub mod error;
 pub mod integrity;
 pub mod keyring;
 pub mod policy;
+pub mod state;
 pub mod types;
 
 // Re-export commonly used types
@@ -13,4 +14,5 @@ pub mod types;
 // pub use encapsulator::CapsulaBuilder;
 pub use error::{CoreError, Result};
 pub use keyring::{KeyWrap, Keyring};
+pub use state::{CapsuleState, StateTransitionError, UploadMeta, UploadVerification};
 pub use types::*;
