@@ -21,7 +21,7 @@ impl Aes {
         Ok(Self { cipher })
     }
 
-    /// Encrypt data with AES-256-GCM
+    /// Encrypt data with AES-256-GCM (auto-generated nonce)
     ///
     /// Returns encrypted data with 12-byte nonce prepended
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -39,6 +39,32 @@ impl Aes {
         result.extend_from_slice(&ciphertext);
         
         Ok(result)
+    }
+
+    /// Encrypt data with AES-256-GCM using external nonce and AAD
+    ///
+    /// # Arguments
+    /// * `plaintext` - Data to encrypt
+    /// * `nonce` - 12-byte nonce for encryption
+    /// * `aad` - Additional authenticated data (can be empty)
+    ///
+    /// # Returns
+    /// Encrypted data with authentication tag, nonce NOT prepended
+    pub fn encrypt_with_nonce_and_aad(&self, plaintext: &[u8], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>> {
+        use aes_gcm::aead::AeadInPlace;
+        
+        let nonce = Nonce::from_slice(nonce);
+        let mut buffer = plaintext.to_vec();
+        
+        // Encrypt in-place with AAD
+        let tag = self.cipher
+            .encrypt_in_place_detached(&nonce, aad, &mut buffer)
+            .map_err(|e| Error::Other(format!("AES-GCM encryption with AAD failed: {}", e)))?;
+        
+        // Append authentication tag
+        buffer.extend_from_slice(&tag);
+        
+        Ok(buffer)
     }
 
     /// Decrypt data with AES-256-GCM
@@ -60,6 +86,37 @@ impl Aes {
             .map_err(|e| Error::Other(format!("AES-GCM decryption failed: {}", e)))?;
         
         Ok(plaintext)
+    }
+
+    /// Decrypt data with AES-256-GCM using external nonce and AAD
+    ///
+    /// # Arguments
+    /// * `encrypted_data` - Encrypted data with authentication tag (no nonce prepended)
+    /// * `nonce` - 12-byte nonce used for encryption
+    /// * `aad` - Additional authenticated data used during encryption
+    ///
+    /// # Returns
+    /// Decrypted plaintext
+    pub fn decrypt_with_nonce_and_aad(&self, encrypted_data: &[u8], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>> {
+        use aes_gcm::aead::AeadInPlace;
+        
+        if encrypted_data.len() < 16 {
+            return Err(Error::Other("Encrypted data too short for AES-GCM tag".to_string()));
+        }
+        
+        let nonce = Nonce::from_slice(nonce);
+        
+        // Separate ciphertext and authentication tag
+        let tag_start = encrypted_data.len() - 16;
+        let mut buffer = encrypted_data[..tag_start].to_vec();
+        let tag = &encrypted_data[tag_start..];
+        
+        // Decrypt in-place with AAD
+        self.cipher
+            .decrypt_in_place_detached(&nonce, aad, &mut buffer, tag.into())
+            .map_err(|e| Error::Other(format!("AES-GCM decryption with AAD failed: {}", e)))?;
+        
+        Ok(buffer)
     }
 }
 

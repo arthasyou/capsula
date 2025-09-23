@@ -7,6 +7,13 @@ pub mod aead;
 pub mod aes;
 pub mod chacha;
 
-pub use aead::{AeadCipher, encrypt_aead, decrypt_aead, generate_key, generate_nonce, generate_id};
+pub use aead::{
+    AeadCipher, AeadAlgorithm, 
+    encrypt_aead, decrypt_aead, 
+    encrypt_aead_with_algorithm, decrypt_aead_with_algorithm,
+    encrypt_aead_with_nonce, decrypt_aead_with_nonce,
+    generate_key, generate_nonce, generate_id,
+    detect_algorithm
+};
 pub use aes::Aes;
 pub use chacha::ChaCha;
