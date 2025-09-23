@@ -431,13 +431,6 @@ mod tests {
                     },
                 },
                 content_type: crate::types::ContentType::Json,
-                state: crate::state::CapsuleState::Pending {
-                    placeholder_uri: "test://placeholder".to_string(),
-                    ciphertext_data: vec![1, 2, 3, 4],
-                    content_hash: "test-hash".to_string(),
-                    ciphertext_len: 4,
-                    created_at: "2023-10-01T00:00:00Z".to_string(),
-                },
             },
             origin_text: None,
         })

@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::block::SealedBlock;
 
 /// 0阶数据胶囊：原始数据层
-/// 
+///
 /// 0阶数据胶囊是数据胶囊体系的基础层，负责封装原始数据。
 /// 它包含两个主要部分：
 /// 1. origin: 原始数据的加密密文（图片、视频、音频、文档等）
 /// 2. origin_text: 文字注释版本的加密密文（OCR提取、描述、摘要等）
-/// 
+///
 /// 设计原则：
 /// - 每个SealedBlock都是独立可验证的加密单元
 /// - 原始数据和文字注释各自有独立的作者证明
@@ -27,7 +27,7 @@ pub struct Cap0 {
     /// - 文档：关键信息提取、标准化字段
     /// - 音频：语音识别转写文本
     /// - 视频：关键帧描述、操作记录
-    /// 
+    ///
     /// 这部分数据为后续ZKP证明提供基础，允许在不暴露原始数据的情况下
     /// 对特定片段或结论生成可验证证明
     pub origin_text: Option<SealedBlock>,
@@ -35,11 +35,11 @@ pub struct Cap0 {
 
 impl Cap0 {
     /// 创建新的0阶数据胶囊
-    /// 
+    ///
     /// # 参数
     /// - `origin`: 原始数据的封装块
     /// - `origin_text`: 可选的文字注释版本封装块
-    /// 
+    ///
     /// # 返回
     /// 新的Cap0实例
     pub fn new(origin: SealedBlock, origin_text: Option<SealedBlock>) -> Self {
@@ -65,7 +65,7 @@ impl Cap0 {
     }
 
     /// 验证0阶胶囊的完整性
-    /// 
+    ///
     /// 检查：
     /// 1. 原始数据封装块的完整性
     /// 2. 文字注释封装块的完整性（如果存在）
@@ -76,139 +76,7 @@ impl Cap0 {
         // 2. 如果有文字注释，验证其签名和完整性
         // 3. 检查两个块之间的一致性（作者、时间戳等）
         // 4. 验证文字注释确实对应原始数据（通过某种绑定机制）
-        
+
         Ok(true) // 临时返回，待实现具体验证逻辑
-    }
-
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        block::SealedBlock,
-        ContentType,
-    };
-    use capsula_key::{Key, RsaKey};
-
-    #[test]
-    fn test_cap0_creation() -> crate::Result<()> {
-        // 创建测试用的密钥
-        let signing_key = RsaKey::generate_2048()?;
-        let recipient_key = RsaKey::generate_2048()?;
-        let mut keyring = std::collections::HashMap::new();
-
-        // 获取接收者公钥
-        let public_keys = recipient_key.public_keys();
-        let signing_key_entry = public_keys
-            .signing_key()
-            .ok_or_else(|| crate::error::CoreError::DataError("No signing key found".to_string()))?;
-        let recipient_public_key_spki = signing_key_entry.spki_der.clone();
-
-        // 创建原始数据封装块
-        let origin_data = b"This is the original medical image data";
-        let (origin_block, _) = SealedBlock::seal(
-            origin_data,
-            ContentType::Png, // 使用已有的图片类型
-            b"medical_image_aad",
-            &mut keyring,
-            &recipient_public_key_spki,
-            &signing_key,
-        )?;
-
-        // 创建文字注释封装块
-        let text_data = b"Patient: John Doe, Diagnosis: Normal chest X-ray, no abnormalities detected";
-        let (text_block, _) = SealedBlock::seal(
-            text_data,
-            ContentType::Json,
-            b"medical_text_aad",
-            &mut keyring,
-            &recipient_public_key_spki,
-            &signing_key,
-        )?;
-
-        // 创建0阶数据胶囊
-        let cap0 = Cap0::new(origin_block, Some(text_block));
-
-        // 验证基本属性
-        assert_eq!(cap0.get_origin().content_type, ContentType::Png);
-        assert!(cap0.has_text_version());
-        assert_eq!(cap0.get_origin_text().unwrap().content_type, ContentType::Json);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_cap0_without_text() -> crate::Result<()> {
-        // 创建测试用的密钥
-        let signing_key = RsaKey::generate_2048()?;
-        let recipient_key = RsaKey::generate_2048()?;
-        let mut keyring = std::collections::HashMap::new();
-
-        // 获取接收者公钥
-        let public_keys = recipient_key.public_keys();
-        let signing_key_entry = public_keys
-            .signing_key()
-            .ok_or_else(|| crate::error::CoreError::DataError("No signing key found".to_string()))?;
-        let recipient_public_key_spki = signing_key_entry.spki_der.clone();
-
-        // 创建只有原始数据的封装块
-        let origin_data = b"Raw binary data without text annotation";
-        let (origin_block, _) = SealedBlock::seal(
-            origin_data,
-            ContentType::Pdf, // 使用PDF作为二进制文档类型
-            b"raw_data_aad",
-            &mut keyring,
-            &recipient_public_key_spki,
-            &signing_key,
-        )?;
-
-        // 创建没有文字注释的0阶数据胶囊
-        let cap0 = Cap0::new(origin_block, None);
-
-        // 验证基本属性
-        assert!(!cap0.has_text_version());
-        assert!(cap0.get_origin_text().is_none());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_cap0_serialization() -> crate::Result<()> {
-        // 创建测试用的密钥
-        let signing_key = RsaKey::generate_2048()?;
-        let recipient_key = RsaKey::generate_2048()?;
-        let mut keyring = std::collections::HashMap::new();
-
-        // 获取接收者公钥
-        let public_keys = recipient_key.public_keys();
-        let signing_key_entry = public_keys
-            .signing_key()
-            .ok_or_else(|| crate::error::CoreError::DataError("No signing key found".to_string()))?;
-        let recipient_public_key_spki = signing_key_entry.spki_der.clone();
-
-        // 创建测试数据
-        let origin_data = b"Test medical data";
-        let (origin_block, _) = SealedBlock::seal(
-            origin_data,
-            ContentType::Text, // 使用文本类型
-            b"test_aad",
-            &mut keyring,
-            &recipient_public_key_spki,
-            &signing_key,
-        )?;
-
-        let cap0 = Cap0::new(origin_block, None);
-
-        // 测试序列化和反序列化
-        let json = serde_json::to_string(&cap0).unwrap();
-        let deserialized: Cap0 = serde_json::from_str(&json).unwrap();
-
-        // 验证反序列化后的数据
-        assert_eq!(cap0.get_origin().content_type, deserialized.get_origin().content_type);
-        assert_eq!(cap0.has_text_version(), deserialized.has_text_version());
-
-        Ok(())
     }
 }

@@ -6,7 +6,6 @@ use crate::{
     capsule::{Cap0, Cap1, Cap2, Capsule, CapsuleHeader, CapsulePayload, PolicyControl},
     integrity::{digest::Digest, signature::Signature},
     keyring::Keyring,
-    state::CapsuleState,
     types::{CapsulaStage, ContentType, EncAlg},
     CoreError, Result,
 };
@@ -465,20 +464,10 @@ impl SealedBlockBuilder {
             },
         };
 
-        // 创建默认状态
-        let state = CapsuleState::Pending {
-            placeholder_uri: "pending://placeholder".to_string(),
-            ciphertext_data: vec![], // 实际应该从ciphertext提取
-            content_hash: "placeholder_hash".to_string(),
-            ciphertext_len: data_len,
-            created_at: chrono::Utc::now().to_rfc3339(),
-        };
-
         Ok(SealedBlock {
             ciphertext,
             proof,
             content_type: self.content_type.unwrap(),
-            state,
         })
     }
 }
