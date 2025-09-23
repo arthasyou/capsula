@@ -180,7 +180,9 @@ impl SealedBlock {
         // 5. 解密数据
         let plaintext = match &self.state {
             // 如果是Pending状态，直接使用状态中存储的密文数据
-            CapsuleState::Pending { ciphertext_data, .. } => {
+            CapsuleState::Pending {
+                ciphertext_data, ..
+            } => {
                 // 将字节数据转换为base64，然后使用现有的decrypt_aead函数
                 let ciphertext_b64 = base64::encode(ciphertext_data);
                 decrypt_aead(&ciphertext_b64, &dek, &nonce_bytes, &aad)
@@ -190,28 +192,27 @@ impl SealedBlock {
             _ => {
                 // 首先尝试从ciphertext直接获取（适用于Inline存储）
                 match self.ciphertext.get_ciphertext_b64() {
-                    Ok(ciphertext_b64) => {
-                        decrypt_aead(ciphertext_b64, &dek, &nonce_bytes, &aad)
-                            .map_err(|e| Error::DataError(format!("Decryption failed: {}", e)))?
-                    }
+                    Ok(ciphertext_b64) => decrypt_aead(ciphertext_b64, &dek, &nonce_bytes, &aad)
+                        .map_err(|e| Error::DataError(format!("Decryption failed: {}", e)))?,
                     Err(_) => {
                         // 对于External存储，在没有真实存储后端的情况下，
                         // 我们需要特殊处理。目前这是一个测试限制。
-                        // 
+                        //
                         // 在生产环境中，这里应该：
                         // 1. 从URI解析存储后端类型
                         // 2. 使用相应的存储客户端下载密文
                         // 3. 解密并返回明文
                         //
                         // 现在我们返回一个更友好的错误信息
-                        return Err(Error::DataError(
-                            format!("Cannot decrypt: External storage at '{}' requires a storage backend implementation. \
-                                   This is expected for current testing without real S3 backend.", 
-                                   match &self.ciphertext.storage {
-                                       CipherStorage::External { uri, .. } => uri,
-                                       _ => "unknown"
-                                   })
-                        ));
+                        return Err(Error::DataError(format!(
+                            "Cannot decrypt: External storage at '{}' requires a storage backend \
+                             implementation. This is expected for current testing without real S3 \
+                             backend.",
+                            match &self.ciphertext.storage {
+                                CipherStorage::External { uri, .. } => uri,
+                                _ => "unknown",
+                            }
+                        )));
                     }
                 }
             }
@@ -264,7 +265,7 @@ impl SealedBlock {
     pub fn seal_pending<S: SigningKey>(
         plaintext: &[u8],
         content_type: ContentType,
-        placeholder_uri: String,        // 占位符URI模板，如 "s3://bucket/data-{hash}"
+        placeholder_uri: String, // 占位符URI模板，如 "s3://bucket/data-{hash}"
         aad: &[u8],
         keyring: &mut Keyring,
         recipient_public_key: &[u8],
@@ -302,8 +303,9 @@ impl SealedBlock {
         let author_hint = signing_key.key_id_hex();
 
         // 2. 准备密文数据用于上传
-        let ciphertext_bytes = base64::decode(&ciphertext_b64)
-            .map_err(|e| Error::DataError(format!("Failed to decode ciphertext for upload: {}", e)))?;
+        let ciphertext_bytes = base64::decode(&ciphertext_b64).map_err(|e| {
+            Error::DataError(format!("Failed to decode ciphertext for upload: {}", e))
+        })?;
 
         // 3. 计算内容哈希（用于生成最终URI）
         let content_hash = sha256_hex(&ciphertext_bytes);
@@ -342,11 +344,7 @@ impl SealedBlock {
         };
 
         // 5. 创建Pending状态
-        let state = CapsuleState::new_pending(
-            placeholder_uri,
-            ciphertext_bytes,
-            content_hash,
-        );
+        let state = CapsuleState::new_pending(placeholder_uri, ciphertext_bytes, content_hash);
 
         Ok((
             SealedBlock {
@@ -366,20 +364,26 @@ impl SealedBlock {
         target_uri: String,
         upload_meta: Option<UploadMeta>,
     ) -> std::result::Result<(), StateTransitionError> {
-        self.state = self.state.clone().start_upload(upload_id, target_uri.clone(), upload_meta)?;
-        
+        self.state = self
+            .state
+            .clone()
+            .start_upload(upload_id, target_uri.clone(), upload_meta)?;
+
         // 在上传阶段，我们保持Inline存储，只有在上传完成时才转换为External
         // 这样在上传过程中，数据仍然可以直接访问
         // 如果已经是External存储，则更新URI
         if let CipherStorage::External { uri, .. } = &mut self.ciphertext.storage {
             *uri = target_uri;
         }
-        
+
         Ok(())
     }
 
     /// 更新上传进度
-    pub fn update_upload_progress(&mut self, progress: f64) -> std::result::Result<(), StateTransitionError> {
+    pub fn update_upload_progress(
+        &mut self,
+        progress: f64,
+    ) -> std::result::Result<(), StateTransitionError> {
         self.state.update_progress(progress)
     }
 
@@ -389,11 +393,18 @@ impl SealedBlock {
         final_uri: String,
         verification: Option<crate::state::UploadVerification>,
     ) -> std::result::Result<(), StateTransitionError> {
-        self.state = self.state.clone().mark_completed(final_uri.clone(), verification)?;
-        
+        self.state = self
+            .state
+            .clone()
+            .mark_completed(final_uri.clone(), verification)?;
+
         // 转换存储方式：从Inline转换为External（表示数据已上传）
         match &self.ciphertext.storage {
-            CipherStorage::Inline { ciphertext_len, ciphertext_digest, .. } => {
+            CipherStorage::Inline {
+                ciphertext_len,
+                ciphertext_digest,
+                ..
+            } => {
                 // 转换为External存储，表示数据已经上传到外部存储
                 self.ciphertext.storage = CipherStorage::External {
                     uri: final_uri,
@@ -403,12 +414,15 @@ impl SealedBlock {
             }
             CipherStorage::External { .. } => {
                 // 如果已经是External存储，只更新URI
-                if let CipherStorage::External { uri: existing_uri, .. } = &mut self.ciphertext.storage {
+                if let CipherStorage::External {
+                    uri: existing_uri, ..
+                } = &mut self.ciphertext.storage
+                {
                     *existing_uri = final_uri;
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -419,7 +433,10 @@ impl SealedBlock {
         error_code: Option<String>,
         retryable: bool,
     ) -> std::result::Result<(), StateTransitionError> {
-        self.state = self.state.clone().mark_failed(error, error_code, retryable)?;
+        self.state = self
+            .state
+            .clone()
+            .mark_failed(error, error_code, retryable)?;
         Ok(())
     }
 
@@ -446,7 +463,9 @@ impl SealedBlock {
     /// 获取待上传的密文数据（仅在Pending状态时有效）
     pub fn get_pending_ciphertext(&self) -> Option<&Vec<u8>> {
         match &self.state {
-            CapsuleState::Pending { ciphertext_data, .. } => Some(ciphertext_data),
+            CapsuleState::Pending {
+                ciphertext_data, ..
+            } => Some(ciphertext_data),
             _ => None,
         }
     }
@@ -545,16 +564,18 @@ mod tests {
         assert!(sealed_block.can_upload());
         assert!(!sealed_block.is_completed());
         assert_eq!(sealed_block.get_upload_progress(), Some(0.0));
-        
+
         // Verify we can get the pending ciphertext
         assert!(sealed_block.get_pending_ciphertext().is_some());
 
         // Start upload
-        sealed_block.start_upload(
-            "upload-123".to_string(),
-            "s3://test-bucket/data-abc123".to_string(),
-            None,
-        ).unwrap();
+        sealed_block
+            .start_upload(
+                "upload-123".to_string(),
+                "s3://test-bucket/data-abc123".to_string(),
+                None,
+            )
+            .unwrap();
 
         // Verify uploading state
         assert!(!sealed_block.can_upload());
@@ -565,18 +586,20 @@ mod tests {
         assert_eq!(sealed_block.get_upload_progress(), Some(0.5));
 
         // Verify we can still unseal during upload (Inline storage)
-        println!("Storage during upload: {:?}", match &sealed_block.ciphertext.storage {
-            CipherStorage::Inline { .. } => "Inline".to_string(),
-            CipherStorage::External { uri, .. } => format!("External({})", uri),
-        });
+        println!(
+            "Storage during upload: {:?}",
+            match &sealed_block.ciphertext.storage {
+                CipherStorage::Inline { .. } => "Inline".to_string(),
+                CipherStorage::External { uri, .. } => format!("External({})", uri),
+            }
+        );
         let decrypted_during_upload = sealed_block.unseal(&keyring, &recipient_key).unwrap();
         assert_eq!(decrypted_during_upload, plaintext);
 
         // Mark completed
-        sealed_block.mark_upload_completed(
-            "s3://test-bucket/data-abc123".to_string(),
-            None,
-        ).unwrap();
+        sealed_block
+            .mark_upload_completed("s3://test-bucket/data-abc123".to_string(), None)
+            .unwrap();
 
         // Verify completed state
         assert!(sealed_block.is_completed());
@@ -585,11 +608,14 @@ mod tests {
 
         // Verify storage conversion after completion
         println!("Current state: {:?}", sealed_block.get_state().state_name());
-        println!("Storage after completion: {:?}", match &sealed_block.ciphertext.storage {
-            CipherStorage::Inline { .. } => "Inline".to_string(),
-            CipherStorage::External { uri, .. } => format!("External({})", uri),
-        });
-        
+        println!(
+            "Storage after completion: {:?}",
+            match &sealed_block.ciphertext.storage {
+                CipherStorage::Inline { .. } => "Inline".to_string(),
+                CipherStorage::External { uri, .. } => format!("External({})", uri),
+            }
+        );
+
         // After conversion to External storage, unsealing requires a storage backend
         // In a real application, this would fetch from S3 and then unseal
         // For this test, we expect an appropriate error message
