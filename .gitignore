@@ -51,4 +51,7 @@ coverage/
 /test_certs/
 
 # Claude config
-.claude
+.claude/
+
+# serena
+.serena/
