@@ -1,57 +1,59 @@
 //! # SealedBlock 模块：数据加密封装
-//! 
+//!
 //! 本模块提供了两种数据加密存储模式：**内联存储 (Inline)** 和 **外部存储 (External)**
-//! 
+//!
 //! ## 存储模式说明
-//! 
+//!
 //! ### 内联存储 (Inline)
 //! 适用于小型数据，密文直接存储在 SealedBlock 结构中
-//! 
+//!
 //! **使用流程**：
 //! ```rust
 //! // 1. 封装数据
-//! let sealed_block = SealedBlock::seal_inline(
-//!     plaintext, content_type, aad, keyring, spki_der, signing_key
-//! )?;
-//! 
+//! let sealed_block =
+//!     SealedBlock::seal_inline(plaintext, content_type, aad, keyring, spki_der, signing_key)?;
+//!
 //! // 2. 解封数据
 //! let decrypted = sealed_block.unseal_inline(keyring, decryption_key)?;
 //! ```
-//! 
+//!
 //! ### 外部存储 (External)
 //! 适用于大型文件，密文存储在外部系统（S3、IPFS、HTTP等）
-//! 
+//!
 //! **封装流程**：
 //! ```rust
 //! // 1. 预备封装：加密文件并生成元数据
 //! let metadata = SealedBlock::pre_seal(
-//!     input_file_path, output_file_path, content_type, 
-//!     aad, keyring, spki_der, signing_key
+//!     input_file_path,
+//!     output_file_path,
+//!     content_type,
+//!     aad,
+//!     keyring,
+//!     spki_der,
+//!     signing_key,
 //! )?;
-//! 
+//!
 //! // 2. 用户负责：将 output_file_path 的加密文件上传到外部存储
 //! let storage_uri = upload_to_external_storage(output_file_path)?; // 用户实现
-//! 
+//!
 //! // 3. 设置URI并创建最终封装
 //! let sealed_block = SealedBlock::set_uri(metadata, storage_uri)?;
 //! ```
-//! 
+//!
 //! **解封流程**：
 //! ```rust
 //! // 1. 获取外部存储URI
 //! let uri = sealed_block.get_external_uri()?;
-//! 
+//!
 //! // 2. 用户负责：从外部存储下载加密文件
 //! let downloaded_file = download_from_external_storage(uri)?; // 用户实现
-//! 
+//!
 //! // 3. 解封数据
-//! sealed_block.unseal_external(
-//!     &downloaded_file, &output_file, keyring, decryption_key
-//! )?;
+//! sealed_block.unseal_external(&downloaded_file, &output_file, keyring, decryption_key)?;
 //! ```
-//! 
+//!
 //! ## 重要说明
-//! 
+//!
 //! - **职责分离**：本模块只负责加密/解密，外部存储的上传/下载由用户实现
 //! - **灵活性**：支持任何外部存储协议（S3、HTTP、IPFS、自定义等）
 //! - **安全性**：密文完整性通过摘要验证，作者身份通过数字签名验证
@@ -79,14 +81,6 @@ pub struct SealedBlock {
     pub ciphertext: Ciphertext,    // 密文主体（机密性/完整性 by AEAD）
     pub proof: AuthorProof,        // 唯一作者的来源/不可抵赖证明
     pub content_type: ContentType, // 明文内容类型（MIME）
-}
-
-// --- 预备封装元数据：等待外部上传的中间状态 ---
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreSealMetadata {
-    pub ciphertext_metadata: Ciphertext, // 密文元数据（包含内联的密文）
-    pub proof: AuthorProof,              // 唯一作者的来源/不可抵赖证明
-    pub content_type: ContentType,       // 明文内容类型（MIME）
 }
 
 // --- 存储类型枚举 ---
@@ -137,7 +131,7 @@ impl SealedBlock {
         })
     }
 
-    /// 预备封装：加密文件并生成元数据，准备外部上传
+    /// 预备封装：加密文件并生成SealedBlock（URI为占位符）
     /// 直接调用 Ciphertext::new_external 进行文件加密
     pub fn pre_seal<S>(
         input_file_path: &std::path::Path,  // 输入文件路径
@@ -147,7 +141,7 @@ impl SealedBlock {
         keyring: &mut Keyring,              // 密钥环用于存储加密的DEK
         spki_der: &[u8],                    // 所有者公钥（SPKI DER格式）
         signing_key: &S,                    // 作者签名密钥
-    ) -> Result<PreSealMetadata>
+    ) -> Result<Self>
     where
         S: Key + KeySign,
     {
@@ -168,46 +162,37 @@ impl SealedBlock {
             spki_der,
         )?;
 
-        // 4. 创建元数据
-        let metadata = PreSealMetadata {
-            ciphertext_metadata: ciphertext,
+        // 4. 创建SealedBlock（URI为占位符，等待后续设置）
+        Ok(SealedBlock {
+            ciphertext,
             proof,
             content_type,
-        };
-
-        Ok(metadata)
+        })
     }
 
-    /// 设置外部存储URI并创建最终的外部存储封装
-    pub fn set_uri(metadata: PreSealMetadata, storage_uri: String) -> Result<Self> {
-        // 检查元数据的存储类型必须是外部存储
-        let external_storage = match &metadata.ciphertext_metadata.storage {
+    /// 设置外部存储URI
+    ///
+    /// 用户上传加密文件后调用此方法设置存储URI，完成封装过程
+    pub fn set_uri(&mut self, storage_uri: String) -> Result<()> {
+        // 检查存储类型必须是外部存储
+        match &self.ciphertext.storage {
             crate::block::ciphertext::CipherStorage::External {
                 ciphertext_len,
                 ciphertext_digest,
                 ..
-            } => crate::block::ciphertext::CipherStorage::External {
-                uri: storage_uri,
-                ciphertext_len: *ciphertext_len,
-                ciphertext_digest: ciphertext_digest.clone(),
-            },
-            crate::block::ciphertext::CipherStorage::Inline { .. } => {
-                return Err(Error::DataError(
-                    "Cannot seal from upload: metadata contains inline storage, expected external \
-                     storage"
-                        .to_string(),
-                ));
+            } => {
+                // 更新存储URI
+                self.ciphertext.storage = crate::block::ciphertext::CipherStorage::External {
+                    uri: storage_uri,
+                    ciphertext_len: *ciphertext_len,
+                    ciphertext_digest: ciphertext_digest.clone(),
+                };
+                Ok(())
             }
-        };
-
-        let mut ciphertext = metadata.ciphertext_metadata;
-        ciphertext.storage = external_storage;
-
-        Ok(SealedBlock {
-            ciphertext,
-            proof: metadata.proof,
-            content_type: metadata.content_type,
-        })
+            crate::block::ciphertext::CipherStorage::Inline { .. } => Err(Error::DataError(
+                "Cannot set URI: block uses inline storage, not external storage".to_string(),
+            )),
+        }
     }
 
     /// 检查存储类型

@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::block::SealedBlock;
+use crate::keyring::Keyring;
+use crate::ContentType;
+use capsula_key::key::{Key, KeyEncDec, KeySign};
 
 /// 1阶数据胶囊：解释层
 ///
 /// 1阶数据胶囊是在0阶数据胶囊基础上的解释层，包含：
 /// 1. cap0_id: 关联的0阶数据胶囊ID
 /// 2. meta: 元数据的加密密文（6元素向量：采集者、拥有者、摘要、期限等）
-/// 3. summary: 数据摘要的加密密文（BNF→JSON结构化摘要）
+/// 3. bnf_extract: BNF解析提取的结构化内容（BNF→JSON结构化数据）
 /// 4. zkp: 零知识证明（暂时可选，未来用于证明摘要片段来自原始数据）
 ///
 /// 设计原则：
@@ -70,50 +73,6 @@ pub struct ZkpProof {
 }
 
 impl Cap1 {
-    /// 创建新的1阶数据胶囊
-    ///
-    /// # 参数
-    /// - `cap0_id`: 关联的0阶数据胶囊ID
-    /// - `meta`: 元数据的封装块
-    /// - `summary`: 摘要数据的封装块
-    /// - `zkp`: 可选的零知识证明
-    ///
-    /// # 返回
-    /// 新的Cap1实例
-    pub fn new(
-        cap0_id: String,
-        meta: SealedBlock,
-        bnf_extract: SealedBlock,
-        zkp: Option<ZkpProof>,
-    ) -> Self {
-        Self {
-            cap0_id,
-            meta,
-            bnf_extract,
-            zkp,
-        }
-    }
-
-    /// 获取关联的0阶数据胶囊ID
-    pub fn get_cap0_id(&self) -> &str {
-        &self.cap0_id
-    }
-
-    /// 获取元数据封装块的引用
-    pub fn get_meta(&self) -> &SealedBlock {
-        &self.meta
-    }
-
-    /// 获取BNF解析提取内容封装块的引用
-    pub fn get_bnf_extract(&self) -> &SealedBlock {
-        &self.bnf_extract
-    }
-
-    /// 获取ZKP证明的引用（如果存在）
-    pub fn get_zkp(&self) -> Option<&ZkpProof> {
-        self.zkp.as_ref()
-    }
-
     /// 检查是否包含ZKP证明
     pub fn has_zkp_proof(&self) -> bool {
         self.zkp.is_some()
@@ -167,6 +126,94 @@ impl Cap1 {
             zkp_claim: self.zkp.as_ref().map(|z| z.claim.clone()),
             created_at: self.meta.proof.issued_at.clone(),
         }
+    }
+
+    /// 封装创建1阶数据胶囊
+    ///
+    /// 将元数据和BNF提取数据加密封装成1阶数据胶囊
+    /// 由于数据量相对较小，使用内联存储模式
+    ///
+    /// # 参数
+    /// - `cap0_id`: 关联的0阶数据胶囊ID
+    /// - `meta_data`: 元数据明文字节
+    /// - `bnf_extract_data`: BNF解析提取的数据明文字节
+    /// - `content_types`: 内容类型元组 (meta_type, bnf_extract_type)
+    /// - `aad`: 额外认证数据（外层上下文）
+    /// - `keyring`: 密钥环用于存储加密的DEK
+    /// - `spki_der`: 所有者公钥（SPKI DER格式）
+    /// - `signing_key`: 作者签名密钥
+    /// - `zkp`: 可选的零知识证明
+    ///
+    /// # 返回
+    /// 新的Cap1实例，所有数据都已加密并签名
+    pub fn seal<S>(
+        cap0_id: String,
+        meta_data: &[u8],
+        bnf_extract_data: &[u8],
+        content_types: (ContentType, ContentType),
+        aad: &[u8],
+        keyring: &mut Keyring,
+        spki_der: &[u8],
+        signing_key: &S,
+        zkp: Option<ZkpProof>,
+    ) -> crate::Result<Self>
+    where
+        S: Key + KeySign,
+    {
+        // 1. 封装元数据
+        let meta = SealedBlock::seal_inline(
+            meta_data,
+            content_types.0,
+            aad,
+            keyring,
+            spki_der,
+            signing_key,
+        )?;
+
+        // 2. 封装BNF提取数据
+        let bnf_extract = SealedBlock::seal_inline(
+            bnf_extract_data,
+            content_types.1,
+            aad,
+            keyring,
+            spki_der,
+            signing_key,
+        )?;
+
+        Ok(Self {
+            cap0_id,
+            meta,
+            bnf_extract,
+            zkp,
+        })
+    }
+
+    /// 解封1阶数据胶囊
+    ///
+    /// 解密1阶胶囊中的元数据和BNF提取数据
+    /// 由于1阶胶囊使用内联存储，解封过程相对简单
+    ///
+    /// # 参数
+    /// - `keyring`: 密钥环
+    /// - `decryption_key`: 解密密钥
+    ///
+    /// # 返回
+    /// 解密后的数据元组 (元数据, BNF提取数据)
+    pub fn unseal<T>(
+        &self,
+        keyring: &Keyring,
+        decryption_key: &T,
+    ) -> crate::Result<(Vec<u8>, Vec<u8>)>
+    where
+        T: Key + KeyEncDec,
+    {
+        // 1. 解封元数据
+        let meta_data = self.meta.unseal_inline(keyring, decryption_key)?;
+
+        // 2. 解封BNF提取数据
+        let bnf_extract_data = self.bnf_extract.unseal_inline(keyring, decryption_key)?;
+
+        Ok((meta_data, bnf_extract_data))
     }
 }
 

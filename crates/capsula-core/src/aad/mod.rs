@@ -432,7 +432,38 @@ mod tests {
                 },
                 content_type: crate::types::ContentType::Json,
             },
-            origin_text: None,
+            origin_text: crate::block::SealedBlock {
+                ciphertext: crate::block::ciphertext::Ciphertext {
+                    aad: "dGVzdF90ZXh0".to_string(), // base64("test_text")
+                    enc: EncAlg::Aes256Gcm,
+                    nonce: "MTIzNDU2Nzg5MA==".to_string(), // base64("1234567890")
+                    len: 9,
+                    dek_id: "dek:test456".to_string(),
+                    storage: crate::block::ciphertext::CipherStorage::Inline {
+                        ct_b64: "dGVzdHRleHRkYXRh".to_string(), // base64("testtextdata")
+                        ciphertext_len: Some(9),
+                        ciphertext_digest: Some(Digest {
+                            alg: "SHA-256".to_string(),
+                            hash: "test-text-hash".to_string(),
+                        }),
+                    },
+                },
+                proof: crate::block::proof::AuthorProof {
+                    subject: Digest {
+                        alg: "SHA-256".to_string(),
+                        hash: "text-subject-hash".to_string(),
+                    },
+                    schema_hash: Some("text-schema-hash".to_string()),
+                    issued_at: Some("2023-10-01T00:00:00Z".to_string()),
+                    signature: crate::integrity::signature::Signature {
+                        alg: "Ed25519".to_string(),
+                        sig: "dGV4dHNpZ25hdHVyZQ==".to_string(), // base64("textsignature")
+                        author_hint: "test-author".to_string(),
+                        cert_hint: Some("cert-hint".to_string()),
+                    },
+                },
+                content_type: crate::types::ContentType::Text,
+            },
         })
     }
 

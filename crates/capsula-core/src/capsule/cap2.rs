@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::integrity::{digest::Digest, signature::Signature};
+use capsula_key::key::{Key, KeySign};
 
 /// 2阶数据胶囊：聚合层
 /// 
@@ -78,30 +79,6 @@ pub struct RefMetadata {
 }
 
 impl Cap2 {
-    /// 创建新的2阶数据胶囊
-    /// 
-    /// # 参数
-    /// - `owner_id`: 所有者ID
-    /// - `refs`: 引用条目列表
-    /// - `bundle_hash`: 引用集合的哈希
-    /// - `bundle_signature`: 对哈希的签名
-    /// 
-    /// # 返回
-    /// 新的Cap2实例
-    pub fn new(
-        owner_id: String,
-        refs: Vec<RefEntry>,
-        bundle_hash: Digest,
-        bundle_signature: Signature,
-    ) -> Self {
-        Self {
-            owner_id,
-            refs,
-            bundle_hash,
-            bundle_signature,
-        }
-    }
-
     /// 计算引用集合的哈希值
     /// 
     /// 对refs进行规范化序列化后计算SHA-256哈希
@@ -138,16 +115,6 @@ impl Cap2 {
     pub fn verify_bundle_hash(&self) -> crate::Result<bool> {
         let computed_hash = self.compute_bundle_hash()?;
         Ok(computed_hash.hash == self.bundle_hash.hash)
-    }
-
-    /// 获取所有者ID
-    pub fn get_owner_id(&self) -> &str {
-        &self.owner_id
-    }
-
-    /// 获取引用条目列表
-    pub fn get_refs(&self) -> &[RefEntry] {
-        &self.refs
     }
 
     /// 根据报告类型查找引用条目
@@ -233,6 +200,66 @@ impl Cap2 {
         } else {
             Ok(false)
         }
+    }
+
+    /// 封装创建2阶数据胶囊
+    ///
+    /// 将引用条目列表封装成2阶数据胶囊，自动计算hash和签名
+    /// 2阶胶囊使用明文存储引用信息，只对引用集合进行签名保护
+    ///
+    /// # 参数
+    /// - `owner_id`: 所有者唯一标识
+    /// - `refs`: 引用条目列表
+    /// - `signing_key`: 签名密钥（用于对引用集合hash签名）
+    ///
+    /// # 返回
+    /// 新的Cap2实例，包含计算好的hash和签名
+    pub fn seal<S>(
+        owner_id: String,
+        refs: Vec<RefEntry>,
+        signing_key: &S,
+    ) -> crate::Result<Self>
+    where
+        S: Key + KeySign,
+    {
+        // 创建临时实例来计算hash
+        let temp_cap2 = Self {
+            owner_id,
+            refs,
+            bundle_hash: Digest {
+                alg: "SHA-256".to_string(),
+                hash: "temp".to_string(),
+            },
+            bundle_signature: Signature {
+                alg: "Ed25519".to_string(),
+                sig: "temp".to_string(),
+                author_hint: "temp".to_string(),
+                cert_hint: None,
+            },
+        };
+
+        // 1. 计算引用集合的hash
+        let bundle_hash = temp_cap2.compute_bundle_hash()?;
+
+        // 2. 对hash进行签名
+        let hash_bytes = bundle_hash.hash.as_bytes();
+        let signature_bytes = signing_key.sign(hash_bytes)
+            .map_err(|e| crate::error::CoreError::DataError(format!("Signing failed: {}", e)))?;
+        
+        let bundle_signature = Signature {
+            alg: "Ed25519".to_string(),
+            sig: capsula_crypto::base64::encode(&signature_bytes),
+            author_hint: format!("cap2_signer_{}", temp_cap2.owner_id),
+            cert_hint: None,
+        };
+
+        // 3. 创建最终的Cap2实例
+        Ok(Self {
+            owner_id: temp_cap2.owner_id,
+            refs: temp_cap2.refs,
+            bundle_hash,
+            bundle_signature,
+        })
     }
 
 }
@@ -323,6 +350,23 @@ impl RefMetadata {
 mod tests {
     use super::*;
 
+    // 测试专用构造函数
+    impl Cap2 {
+        fn new_for_test(
+            owner_id: String,
+            refs: Vec<RefEntry>,
+            bundle_hash: Digest,
+            bundle_signature: Signature,
+        ) -> Self {
+            Self {
+                owner_id,
+                refs,
+                bundle_hash,
+                bundle_signature,
+            }
+        }
+    }
+
     fn create_test_digest() -> Digest {
         Digest {
             alg: "SHA-256".to_string(),
@@ -368,7 +412,7 @@ mod tests {
             ),
         ];
 
-        let cap2 = Cap2::new(
+        let cap2 = Cap2::new_for_test(
             "patient_001".to_string(),
             refs,
             create_test_digest(),
@@ -376,8 +420,8 @@ mod tests {
         );
 
         // 验证基本属性
-        assert_eq!(cap2.get_owner_id(), "patient_001");
-        assert_eq!(cap2.get_refs().len(), 2);
+        assert_eq!(cap2.owner_id, "patient_001");
+        assert_eq!(cap2.refs.len(), 2);
         assert_eq!(cap2.count_total_capsules(), 3);
 
         // 验证类型查找
@@ -434,7 +478,7 @@ mod tests {
             ),
         ];
 
-        let cap2 = Cap2::new(
+        let cap2 = Cap2::new_for_test(
             "owner1".to_string(),
             refs,
             create_test_digest(),
@@ -460,7 +504,7 @@ mod tests {
             ),
         ];
 
-        let cap2_2 = Cap2::new(
+        let cap2_2 = Cap2::new_for_test(
             "owner1".to_string(),
             refs2,
             create_test_digest(),
@@ -475,7 +519,7 @@ mod tests {
 
     #[test]
     fn test_add_ref_entry() -> crate::Result<()> {
-        let mut cap2 = Cap2::new(
+        let mut cap2 = Cap2::new_for_test(
             "owner1".to_string(),
             vec![
                 RefEntry::new(
@@ -495,7 +539,7 @@ mod tests {
             None,
         ))?;
 
-        assert_eq!(cap2.get_refs().len(), 2);
+        assert_eq!(cap2.refs.len(), 2);
         assert_eq!(cap2.count_total_capsules(), 3);
 
         // 添加到已有类型
@@ -505,7 +549,7 @@ mod tests {
             None,
         ))?;
 
-        assert_eq!(cap2.get_refs().len(), 2);
+        assert_eq!(cap2.refs.len(), 2);
         assert_eq!(cap2.count_total_capsules(), 4); // id1不重复计算
 
         let type_a_refs = cap2.find_refs_by_type("类型A").unwrap();
@@ -533,7 +577,7 @@ mod tests {
             ),
         ];
 
-        let cap2 = Cap2::new(
+        let cap2 = Cap2::new_for_test(
             "owner1".to_string(),
             refs,
             create_test_digest(),
@@ -541,7 +585,7 @@ mod tests {
         );
 
         // 验证基本属性
-        assert_eq!(cap2.get_owner_id(), "owner1");
+        assert_eq!(cap2.owner_id, "owner1");
         assert_eq!(cap2.get_report_types(), vec!["类型A".to_string()]);
         assert_eq!(cap2.refs.len(), 1);
         assert_eq!(cap2.count_total_capsules(), 2);
@@ -557,7 +601,7 @@ mod tests {
             ),
         ];
 
-        let cap2 = Cap2::new(
+        let cap2 = Cap2::new_for_test(
             "owner1".to_string(),
             refs,
             create_test_digest(),
@@ -568,8 +612,8 @@ mod tests {
         let json = serde_json::to_string(&cap2).unwrap();
         let deserialized: Cap2 = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(cap2.get_owner_id(), deserialized.get_owner_id());
-        assert_eq!(cap2.get_refs().len(), deserialized.get_refs().len());
+        assert_eq!(cap2.owner_id, deserialized.owner_id);
+        assert_eq!(cap2.refs.len(), deserialized.refs.len());
         assert_eq!(cap2.bundle_hash.hash, deserialized.bundle_hash.hash);
     }
 }

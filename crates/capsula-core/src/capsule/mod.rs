@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use capsula_key::key::{Key, KeyEncDec};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +18,7 @@ pub mod header;
 pub mod meta;
 
 // Re-export commonly used types
-pub use cap0::Cap0;
+pub use cap0::{Cap0, Cap0ExternalSeal};
 pub use cap1::{Cap1, Cap1Summary, ZkpProof};
 pub use cap2::{Cap2, RefEntry, RefMetadata};
 
@@ -126,6 +127,22 @@ pub enum CapsulePayload {
     Cap2(Cap2),
 }
 
+/// 胶囊解封后的内容
+#[derive(Debug, Clone)]
+pub enum CapsuleContent {
+    /// Cap1解封内容
+    Cap1Content {
+        cap0_id: String,
+        meta_data: Vec<u8>,
+        bnf_extract_data: Vec<u8>,
+    },
+    /// Cap2内容（明文引用信息）
+    Cap2Content {
+        owner_id: String,
+        refs: Vec<RefEntry>,
+    },
+}
+
 /// 胶囊完整性保证
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapsuleIntegrity {
@@ -207,6 +224,107 @@ impl Capsule {
             integrity,
             audit_ref: None,
         })
+    }
+
+    /// 快速创建Cap0胶囊
+    ///
+    /// 简化的构造流程，自动生成头部信息和AAD绑定
+    ///
+    /// # 参数
+    /// - `id`: 胶囊唯一标识符
+    /// - `content_type`: 内容类型标识
+    /// - `policy_uri`: 策略URI
+    /// - `permissions`: 权限列表
+    /// - `keyring`: 密钥环
+    /// - `cap0`: 已封装的0阶数据胶囊
+    /// - `creator`: 可选的创建者信息
+    pub fn with_cap0(
+        id: String,
+        content_type: String,
+        policy_uri: String,
+        permissions: Vec<String>,
+        keyring: Keyring,
+        cap0: Cap0,
+        creator: Option<String>,
+    ) -> Result<Self> {
+        let header = CapsuleHeader::new(
+            id,
+            "1.0".to_string(),
+            CapsulaStage::First,
+            content_type,
+            creator,
+        );
+
+        let policy = PolicyControl::new(policy_uri, permissions);
+        let payload = CapsulePayload::Cap0(cap0);
+
+        Self::new(header, policy, keyring, payload)
+    }
+
+    /// 快速创建Cap1胶囊
+    ///
+    /// # 参数
+    /// - `id`: 胶囊唯一标识符
+    /// - `content_type`: 内容类型标识
+    /// - `policy_uri`: 策略URI
+    /// - `permissions`: 权限列表
+    /// - `keyring`: 密钥环
+    /// - `cap1`: 已封装的1阶数据胶囊
+    /// - `creator`: 可选的创建者信息
+    pub fn with_cap1(
+        id: String,
+        content_type: String,
+        policy_uri: String,
+        permissions: Vec<String>,
+        keyring: Keyring,
+        cap1: Cap1,
+        creator: Option<String>,
+    ) -> Result<Self> {
+        let header = CapsuleHeader::new(
+            id,
+            "1.0".to_string(),
+            CapsulaStage::Second,
+            content_type,
+            creator,
+        );
+
+        let policy = PolicyControl::new(policy_uri, permissions);
+        let payload = CapsulePayload::Cap1(cap1);
+
+        Self::new(header, policy, keyring, payload)
+    }
+
+    /// 快速创建Cap2胶囊
+    ///
+    /// # 参数
+    /// - `id`: 胶囊唯一标识符
+    /// - `content_type`: 内容类型标识
+    /// - `policy_uri`: 策略URI
+    /// - `permissions`: 权限列表
+    /// - `keyring`: 密钥环
+    /// - `cap2`: 已封装的2阶数据胶囊
+    /// - `creator`: 可选的创建者信息
+    pub fn with_cap2(
+        id: String,
+        content_type: String,
+        policy_uri: String,
+        permissions: Vec<String>,
+        keyring: Keyring,
+        cap2: Cap2,
+        creator: Option<String>,
+    ) -> Result<Self> {
+        let header = CapsuleHeader::new(
+            id,
+            "1.0".to_string(),
+            CapsulaStage::Third,
+            content_type,
+            creator,
+        );
+
+        let policy = PolicyControl::new(policy_uri, permissions);
+        let payload = CapsulePayload::Cap2(cap2);
+
+        Self::new(header, policy, keyring, payload)
     }
 
     /// 验证AAD绑定的完整性
@@ -322,16 +440,6 @@ impl Capsule {
         Ok(true)
     }
 
-    /// 获取胶囊ID
-    pub fn get_id(&self) -> &str {
-        &self.header.id
-    }
-
-    /// 获取胶囊阶段
-    pub fn get_stage(&self) -> &CapsulaStage {
-        &self.header.stage
-    }
-
     /// 获取载荷类型
     pub fn get_payload_type(&self) -> &str {
         match &self.payload {
@@ -341,9 +449,62 @@ impl Capsule {
         }
     }
 
-    /// 获取载荷的引用
-    pub fn get_payload(&self) -> &CapsulePayload {
-        &self.payload
+    /// 解封胶囊载荷
+    ///
+    /// 根据载荷类型提供统一的解封接口
+    /// 注意：对于Cap0，需要单独处理外部存储的解封
+    pub fn unseal_payload<T>(&self, keyring: &Keyring, decryption_key: &T) -> Result<CapsuleContent>
+    where
+        T: Key + KeyEncDec,
+    {
+        match &self.payload {
+            CapsulePayload::Cap0(_cap0) => {
+                // Cap0使用外部存储，需要单独处理文件下载和解封
+                Err(CoreError::DataError(
+                    "Cap0 uses external storage. Use cap0.unseal() with file paths instead."
+                        .to_string(),
+                ))
+            }
+            CapsulePayload::Cap1(cap1) => {
+                let (meta_data, bnf_data) = cap1.unseal(keyring, decryption_key)?;
+                Ok(CapsuleContent::Cap1Content {
+                    cap0_id: cap1.cap0_id.clone(),
+                    meta_data,
+                    bnf_extract_data: bnf_data,
+                })
+            }
+            CapsulePayload::Cap2(_cap2) => {
+                // Cap2使用明文存储，直接返回引用信息
+                Ok(CapsuleContent::Cap2Content {
+                    owner_id: _cap2.owner_id.clone(),
+                    refs: _cap2.refs.clone(),
+                })
+            }
+        }
+    }
+
+    /// 获取载荷中的Cap0引用（如果是Cap0类型）
+    pub fn as_cap0(&self) -> Option<&Cap0> {
+        match &self.payload {
+            CapsulePayload::Cap0(cap0) => Some(cap0),
+            _ => None,
+        }
+    }
+
+    /// 获取载荷中的Cap1引用（如果是Cap1类型）
+    pub fn as_cap1(&self) -> Option<&Cap1> {
+        match &self.payload {
+            CapsulePayload::Cap1(cap1) => Some(cap1),
+            _ => None,
+        }
+    }
+
+    /// 获取载荷中的Cap2引用（如果是Cap2类型）
+    pub fn as_cap2(&self) -> Option<&Cap2> {
+        match &self.payload {
+            CapsulePayload::Cap2(cap2) => Some(cap2),
+            _ => None,
+        }
     }
 
     /// 设置审计引用
@@ -482,3 +643,113 @@ pub struct Capsula {
     #[serde(default)]
     pub keyring: Keyring, // 传输时的密钥包装
 }
+
+/// 使用示例和 API 指南
+///
+/// # 两步封装设计
+///
+/// ## 步骤1：创建具体的胶囊 (Cap0/1/2)
+/// ```no_run
+/// use std::path::Path;
+///
+/// use capsula_core::*;
+///
+/// // Cap0 - 外部存储，两步封装
+/// let external_seal = Cap0::seal(
+///     Path::new("origin.pdf"),
+///     Path::new("origin.enc"),
+///     Path::new("text.txt"),
+///     Path::new("text.enc"),
+///     (ContentType::Pdf, ContentType::Text),
+///     b"additional_auth_data",
+///     &mut keyring,
+///     &spki_der,
+///     &signing_key,
+/// )?;
+///
+/// // 用户上传文件后设置URI
+/// external_seal.set_origin_uri("s3://bucket/origin.enc".to_string())?;
+/// external_seal.set_origin_text_uri("s3://bucket/text.enc".to_string())?;
+/// let cap0 = external_seal.into_cap0()?;
+///
+/// // Cap1 - 内联存储，一步封装
+/// let cap1 = Cap1::seal(
+///     "cap0_id_123".to_string(),
+///     &meta_data,
+///     &bnf_data,
+///     (ContentType::Json, ContentType::Json),
+///     b"additional_auth_data",
+///     &mut keyring,
+///     &spki_der,
+///     &signing_key,
+///     None, // 可选的ZKP证明
+/// )?;
+///
+/// // Cap2 - 明文引用，自动hash和签名
+/// let cap2 = Cap2::seal("owner_123".to_string(), refs, &signing_key)?;
+/// ```
+///
+/// ## 步骤2：包装成统一胶囊 (Capsule)
+/// ```no_run
+/// // 使用便利方法
+/// let capsule = Capsule::with_cap0(
+///     "capsule_id_123".to_string(),
+///     "medical.blood_test".to_string(),
+///     "policy://medical".to_string(),
+///     vec!["read".to_string(), "decrypt".to_string()],
+///     keyring,
+///     cap0,
+///     Some("医院A".to_string()),
+/// )?;
+///
+/// // 或使用完整方法
+/// let header = CapsuleHeader::new(
+///     "capsule_id_456".to_string(),
+///     "1.0".to_string(),
+///     CapsulaStage::Second,
+///     "medical.interpretation".to_string(),
+///     Some("AI助手".to_string()),
+/// );
+/// let policy = PolicyControl::new(
+///     "policy://ai_analysis".to_string(),
+///     vec!["read".to_string(), "analyze".to_string()],
+/// );
+/// let capsule = Capsule::new(header, policy, keyring, CapsulePayload::Cap1(cap1))?;
+/// ```
+///
+/// ## 使用胶囊
+/// ```no_run
+/// // 直接访问字段
+/// println!("胶囊ID: {}", capsule.header.id);
+/// println!("创建时间: {}", capsule.header.created_at);
+/// println!("载荷类型: {}", capsule.get_payload_type());
+///
+/// // 类型安全的载荷访问
+/// if let Some(cap1) = capsule.as_cap1() {
+///     println!("关联的Cap0 ID: {}", cap1.cap0_id);
+///     let (meta, bnf) = cap1.unseal(&keyring, &decryption_key)?;
+/// }
+///
+/// // 统一解封接口（适用于Cap1和Cap2）
+/// match capsule.unseal_payload(&keyring, &decryption_key)? {
+///     CapsuleContent::Cap1Content {
+///         cap0_id,
+///         meta_data,
+///         bnf_extract_data,
+///     } => {
+///         println!("解封了Cap1，关联Cap0: {}", cap0_id);
+///     }
+///     CapsuleContent::Cap2Content { owner_id, refs } => {
+///         println!("Cap2所有者: {}，引用数: {}", owner_id, refs.len());
+///     }
+/// }
+/// ```
+///
+/// # 设计优势
+///
+/// - **职责分离**：Cap0/1/2专注数据加密，Capsule专注外壳管理
+/// - **类型安全**：编译期确保正确的数据类型
+/// - **灵活性**：同一个Cap可以用不同策略包装成多个Capsule
+/// - **错误隔离**：可以精确定位是数据层还是外壳层的问题
+/// - **可扩展**：易于添加新的胶囊类型而不影响现有代码
+pub mod examples {}
