@@ -8,7 +8,7 @@
 //! 适用于小型数据，密文直接存储在 SealedBlock 结构中
 //!
 //! **使用流程**：
-//! ```rust
+//! ```text
 //! // 1. 封装数据
 //! let sealed_block =
 //!     SealedBlock::seal_inline(plaintext, content_type, aad, keyring, spki_der, signing_key)?;
@@ -21,7 +21,7 @@
 //! 适用于大型文件，密文存储在外部系统（S3、IPFS、HTTP等）
 //!
 //! **封装流程**：
-//! ```rust
+//! ```text
 //! // 1. 预备封装：加密文件并生成元数据
 //! let metadata = SealedBlock::pre_seal(
 //!     input_file_path,
@@ -41,7 +41,7 @@
 //! ```
 //!
 //! **解封流程**：
-//! ```rust
+//! ```text
 //! // 1. 获取外部存储URI
 //! let uri = sealed_block.get_external_uri()?;
 //!

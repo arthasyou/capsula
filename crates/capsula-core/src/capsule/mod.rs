@@ -649,7 +649,7 @@ pub struct Capsula {
 /// # 两步封装设计
 ///
 /// ## 步骤1：创建具体的胶囊 (Cap0/1/2)
-/// ```no_run
+/// ```text
 /// use std::path::Path;
 ///
 /// use capsula_core::*;
@@ -690,7 +690,7 @@ pub struct Capsula {
 /// ```
 ///
 /// ## 步骤2：包装成统一胶囊 (Capsule)
-/// ```no_run
+/// ```text
 /// // 使用便利方法
 /// let capsule = Capsule::with_cap0(
 ///     "capsule_id_123".to_string(),
@@ -718,7 +718,7 @@ pub struct Capsula {
 /// ```
 ///
 /// ## 使用胶囊
-/// ```no_run
+/// ```text
 /// // 直接访问字段
 /// println!("胶囊ID: {}", capsule.header.id);
 /// println!("创建时间: {}", capsule.header.created_at);

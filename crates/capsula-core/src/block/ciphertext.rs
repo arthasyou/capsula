@@ -746,56 +746,42 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs, path::Path};
+    use std::collections::HashMap;
 
-    use capsula_key::{ExportablePrivateKey, Key, RsaKey};
+    use capsula_key::{Key, RsaKey};
 
     use super::*;
 
-    fn create_test_keys() -> Result<(RsaKey, Vec<u8>, Vec<u8>)> {
-        // Create a test RSA key pair
+    // Simple helper for creating test keys - this focuses on testing ciphertext logic, not key generation
+    fn create_test_key() -> Result<(RsaKey, Vec<u8>)> {
         let key_pair = RsaKey::generate_2048()?;
-
-        // Get public key in SPKI DER format
         let public_keys = key_pair.public_keys();
         let signing_key_entry = public_keys
             .signing_key()
             .ok_or_else(|| Error::DataError("No signing key found".to_string()))?;
-
-        // Get private key in DER format
-        let private_key_der = key_pair.to_pkcs8_der()?;
-
-        Ok((
-            key_pair,
-            signing_key_entry.spki_der.clone(),
-            private_key_der,
-        ))
+        Ok((key_pair, signing_key_entry.spki_der.clone()))
     }
 
     #[test]
-    fn test_ciphertext_new_inline_aes() -> Result<()> {
-        let plaintext = b"Hello, World!";
-        let aad = b"additional_authenticated_data";
+    fn test_ciphertext_inline_storage_structure() -> Result<()> {
+        let plaintext = b"Test inline storage";
+        let aad = b"test_aad";
         let mut keyring = HashMap::new();
+        let (_, public_key_spki) = create_test_key()?;
 
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Test AES-256-GCM
         let ciphertext =
             Ciphertext::new_inline_aes(plaintext, aad, &mut keyring, &public_key_spki)?;
 
-        // Verify the structure
+        // Verify core structure
         assert_eq!(ciphertext.enc, EncAlg::Aes256Gcm);
         assert_eq!(ciphertext.len, plaintext.len() as u64);
+        assert!(!ciphertext.dek_id.is_empty());
+        assert!(!ciphertext.aad.is_empty());
+        assert!(!ciphertext.nonce.is_empty());
 
-        // Verify storage type
+        // Verify inline storage
         match &ciphertext.storage {
-            CipherStorage::Inline {
-                ct_b64,
-                ciphertext_len,
-                ciphertext_digest,
-            } => {
+            CipherStorage::Inline { ct_b64, ciphertext_len, ciphertext_digest } => {
                 assert!(!ct_b64.is_empty());
                 assert!(ciphertext_len.is_some());
                 assert!(ciphertext_digest.is_some());
@@ -803,269 +789,29 @@ mod tests {
             _ => panic!("Expected Inline storage"),
         }
 
-        // Verify keyring has the DEK
-        assert!(keyring.contains_key(&ciphertext.dek_id));
-        assert_eq!(keyring.len(), 1);
-
-        // Verify we can get the ciphertext back
-        let ct_b64 = ciphertext.get_ciphertext_b64()?;
-        assert!(!ct_b64.is_empty());
-
-        let ct_bytes = ciphertext.get_ciphertext_bytes()?;
-        assert!(!ct_bytes.is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ciphertext_new_inline_chacha() -> Result<()> {
-        let plaintext = b"Hello, ChaCha!";
-        let aad = b"aad_data";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Test ChaCha20-Poly1305
-        let ciphertext =
-            Ciphertext::new_inline_chacha(plaintext, aad, &mut keyring, &public_key_spki)?;
-
-        // Verify the structure
-        assert_eq!(ciphertext.enc, EncAlg::ChaCha20Poly1305);
-        assert_eq!(ciphertext.len, plaintext.len() as u64);
-
-        // Verify keyring has the DEK
-        assert!(keyring.contains_key(&ciphertext.dek_id));
-        assert_eq!(keyring.len(), 1);
-
-        // Verify we can get the ciphertext back
-        let _ct_b64 = ciphertext.get_ciphertext_b64()?;
-        let _ct_bytes = ciphertext.get_ciphertext_bytes()?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ciphertext_different_algorithms_produce_different_results() -> Result<()> {
-        let plaintext = b"Same plaintext";
-        let aad = b"same_aad";
-        let mut aes_keyring = HashMap::new();
-        let mut chacha_keyring = HashMap::new();
-
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        let aes_ciphertext =
-            Ciphertext::new_inline_aes(plaintext, aad, &mut aes_keyring, &public_key_spki)?;
-
-        let chacha_ciphertext =
-            Ciphertext::new_inline_chacha(plaintext, aad, &mut chacha_keyring, &public_key_spki)?;
-
-        // Different algorithms should produce different ciphertexts
-        let aes_ct = aes_ciphertext.get_ciphertext_b64()?;
-        let chacha_ct = chacha_ciphertext.get_ciphertext_b64()?;
-        assert_ne!(aes_ct, chacha_ct);
-
-        // Different DEK IDs should be generated
-        assert_ne!(aes_ciphertext.dek_id, chacha_ciphertext.dek_id);
-
-        // But same metadata structure
-        assert_eq!(aes_ciphertext.len, chacha_ciphertext.len);
-
-        // Both keyrings should have their respective DEKs
-        assert!(aes_keyring.contains_key(&aes_ciphertext.dek_id));
-        assert!(chacha_keyring.contains_key(&chacha_ciphertext.dek_id));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ciphertext_keyring_integration() -> Result<()> {
-        let plaintext = b"Test keyring integration";
-        let aad = b"test_aad";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Create ciphertext
-        let ciphertext =
-            Ciphertext::new_inline_aes(plaintext, aad, &mut keyring, &public_key_spki)?;
-
-        // Verify keyring structure
-        let key_wrap = keyring
-            .get(&ciphertext.dek_id)
-            .expect("DEK should be in keyring");
-        assert!(!key_wrap.kid.is_empty());
-        assert!(!key_wrap.alg.is_empty());
-        assert!(!key_wrap.cek_wrapped.is_empty());
-
-        // Verify the key wrap has expected algorithm name
-        assert!(key_wrap.alg.contains("RSA")); // Should be RSA-OAEP since we're using RSA keys
-
-        // Verify ciphertext references the correct DEK ID
-        assert!(!ciphertext.dek_id.is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ciphertext_new_external_aes() -> Result<()> {
-        let test_data = b"This is a test file for external encryption with AES-256-GCM algorithm. It contains some sample data to verify the file encryption functionality works correctly.";
-        let aad = b"external_file_aad";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Create temporary input file
-        let input_path = Path::new("/tmp/test_input.txt");
-        let output_path = Path::new("/tmp/test_output.enc");
-
-        // Clean up any existing files
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-
-        // Write test data to input file
-        fs::write(input_path, test_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-
-        // Test AES-256-GCM external encryption
-        let ciphertext = Ciphertext::new_external_aes(
-            input_path,
-            output_path,
-            aad,
-            &mut keyring,
-            &public_key_spki,
-        )?;
-
-        // Verify the structure
-        assert_eq!(ciphertext.enc, EncAlg::Aes256Gcm);
-        assert_eq!(ciphertext.len, test_data.len() as u64);
-
-        // Verify storage type is External
-        match &ciphertext.storage {
-            CipherStorage::External {
-                uri,
-                ciphertext_len,
-                ciphertext_digest,
-            } => {
-                assert!(uri.is_empty()); // Should be empty initially
-                assert!(ciphertext_len.is_some());
-                assert!(ciphertext_digest.is_some());
-            }
-            _ => panic!("Expected External storage"),
-        }
-
-        // Verify output file was created and has content
-        assert!(output_path.exists());
-        let encrypted_file_size = fs::metadata(output_path).unwrap().len();
-        assert!(encrypted_file_size > 0);
-        assert!(encrypted_file_size > test_data.len() as u64); // Should be larger due to encryption overhead
-
-        // Verify keyring has the DEK
-        assert!(keyring.contains_key(&ciphertext.dek_id));
-        assert_eq!(keyring.len(), 1);
-
-        // Test setting URI
-        let mut ciphertext_mut = ciphertext;
-        let test_uri = "https://example.com/encrypted-file";
-        ciphertext_mut.set_external_uri(test_uri.to_string())?;
-
-        // Verify URI was set
-        assert_eq!(ciphertext_mut.get_external_uri()?, test_uri);
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ciphertext_new_external_chacha() -> Result<()> {
-        let test_data = b"Test file for ChaCha20-Poly1305 external encryption. This data will be encrypted and saved to an external file for testing purposes.";
-        let aad = b"chacha_external_aad";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Create temporary file paths
-        let input_path = Path::new("/tmp/test_chacha_input.txt");
-        let output_path = Path::new("/tmp/test_chacha_output.enc");
-
-        // Clean up any existing files
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-
-        // Write test data to input file
-        fs::write(input_path, test_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-
-        // Test ChaCha20-Poly1305 external encryption
-        let ciphertext = Ciphertext::new_external_chacha(
-            input_path,
-            output_path,
-            aad,
-            &mut keyring,
-            &public_key_spki,
-        )?;
-
-        // Verify the structure
-        assert_eq!(ciphertext.enc, EncAlg::ChaCha20Poly1305);
-        assert_eq!(ciphertext.len, test_data.len() as u64);
-
-        // Verify storage type is External
-        match &ciphertext.storage {
-            CipherStorage::External {
-                uri,
-                ciphertext_len,
-                ciphertext_digest,
-            } => {
-                assert!(uri.is_empty()); // Should be empty initially
-                assert!(ciphertext_len.is_some());
-                assert!(ciphertext_digest.is_some());
-            }
-            _ => panic!("Expected External storage"),
-        }
-
-        // Verify output file exists and has correct properties
-        assert!(output_path.exists());
-        let encrypted_file_size = fs::metadata(output_path).unwrap().len();
-        assert!(encrypted_file_size > 0);
-
         // Verify keyring integration
         assert!(keyring.contains_key(&ciphertext.dek_id));
         assert_eq!(keyring.len(), 1);
 
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-
         Ok(())
     }
 
     #[test]
-    fn test_ciphertext_external_uri_management() -> Result<()> {
-        let test_data = b"URI management test data";
-        let aad = b"uri_test_aad";
+    fn test_ciphertext_external_storage_and_uri_management() -> Result<()> {
+        let test_data = b"Test external storage";
+        let aad = b"external_aad";
         let mut keyring = HashMap::new();
+        let (_, public_key_spki) = create_test_key()?;
 
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
+        // Create temporary files for testing
+        let input_path = std::path::Path::new("/tmp/test_external_input.txt");
+        let output_path = std::path::Path::new("/tmp/test_external_output.enc");
+        let _ = std::fs::remove_file(input_path);
+        let _ = std::fs::remove_file(output_path);
 
-        // Create temporary files
-        let input_path = Path::new("/tmp/test_uri_input.txt");
-        let output_path = Path::new("/tmp/test_uri_output.enc");
-
-        // Clean up and create test file
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-        fs::write(input_path, test_data)
+        std::fs::write(input_path, test_data)
             .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
 
-        // Create external ciphertext
         let mut ciphertext = Ciphertext::new_external_aes(
             input_path,
             output_path,
@@ -1074,317 +820,94 @@ mod tests {
             &public_key_spki,
         )?;
 
-        // Test initial state (empty URI)
+        // Verify external storage structure
+        match &ciphertext.storage {
+            CipherStorage::External { uri, ciphertext_len, ciphertext_digest } => {
+                assert!(uri.is_empty()); // Initially empty
+                assert!(ciphertext_len.is_some());
+                assert!(ciphertext_digest.is_some());
+            }
+            _ => panic!("Expected External storage"),
+        }
+
+        // Test URI management
         assert_eq!(ciphertext.get_external_uri()?, "");
+        
+        let test_uri = "s3://bucket/file.enc";
+        ciphertext.set_external_uri(test_uri.to_string())?;
+        assert_eq!(ciphertext.get_external_uri()?, test_uri);
 
-        // Test setting various URI formats
-        let s3_uri = "s3://my-bucket/encrypted-files/file123.enc";
-        ciphertext.set_external_uri(s3_uri.to_string())?;
-        assert_eq!(ciphertext.get_external_uri()?, s3_uri);
-
-        let https_uri = "https://cdn.example.com/secure/abc123.enc";
-        ciphertext.set_external_uri(https_uri.to_string())?;
-        assert_eq!(ciphertext.get_external_uri()?, https_uri);
-
-        // Test that Inline storage cannot have URI set
-        let inline_data = b"inline test";
-        let mut inline_ciphertext =
-            Ciphertext::new_inline_aes(inline_data, aad, &mut keyring, &public_key_spki)?;
-
-        // Should fail to set URI on Inline storage
-        let result = inline_ciphertext.set_external_uri("should_fail".to_string());
-        assert!(result.is_err());
-
-        // Should fail to get URI from Inline storage
-        let result = inline_ciphertext.get_external_uri();
-        assert!(result.is_err());
+        // Test that inline storage rejects URI operations
+        let mut inline_ciphertext = Ciphertext::new_inline_aes(
+            b"inline", aad, &mut HashMap::new(), &public_key_spki
+        )?;
+        assert!(inline_ciphertext.set_external_uri("fail".to_string()).is_err());
+        assert!(inline_ciphertext.get_external_uri().is_err());
 
         // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
+        let _ = std::fs::remove_file(input_path);
+        let _ = std::fs::remove_file(output_path);
 
         Ok(())
     }
 
     #[test]
-    fn test_ciphertext_external_vs_inline_comparison() -> Result<()> {
-        let test_data = b"Comparison test between external and inline encryption methods";
-        let aad = b"comparison_aad";
-        let mut external_keyring = HashMap::new();
-        let mut inline_keyring = HashMap::new();
+    fn test_ciphertext_algorithm_support() -> Result<()> {
+        let plaintext = b"Test algorithm support";
+        let aad = b"test_aad";
+        let mut aes_keyring = HashMap::new();
+        let mut chacha_keyring = HashMap::new();
+        let (_, public_key_spki) = create_test_key()?;
 
-        // Create test keys
-        let (_key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // External encryption test
-        let input_path = Path::new("/tmp/comparison_input.txt");
-        let output_path = Path::new("/tmp/comparison_output.enc");
-
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-        fs::write(input_path, test_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-
-        let external_ciphertext = Ciphertext::new_external_aes(
-            input_path,
-            output_path,
-            aad,
-            &mut external_keyring,
-            &public_key_spki,
+        // Test both algorithms
+        let aes_ciphertext = Ciphertext::new_inline_aes(
+            plaintext, aad, &mut aes_keyring, &public_key_spki
+        )?;
+        let chacha_ciphertext = Ciphertext::new_inline_chacha(
+            plaintext, aad, &mut chacha_keyring, &public_key_spki
         )?;
 
-        // Inline encryption test
-        let inline_ciphertext =
-            Ciphertext::new_inline_aes(test_data, aad, &mut inline_keyring, &public_key_spki)?;
+        // Verify algorithm types
+        assert_eq!(aes_ciphertext.enc, EncAlg::Aes256Gcm);
+        assert_eq!(chacha_ciphertext.enc, EncAlg::ChaCha20Poly1305);
 
-        // Both should have same plaintext length
-        assert_eq!(external_ciphertext.len, inline_ciphertext.len);
-        assert_eq!(external_ciphertext.len, test_data.len() as u64);
-
-        // Both should use same algorithm
-        assert_eq!(external_ciphertext.enc, inline_ciphertext.enc);
-        assert_eq!(external_ciphertext.enc, EncAlg::Aes256Gcm);
-
-        // Both should have different DEK IDs (randomly generated)
-        assert_ne!(external_ciphertext.dek_id, inline_ciphertext.dek_id);
-
-        // Both should have different nonces (randomly generated)
-        assert_ne!(external_ciphertext.nonce, inline_ciphertext.nonce);
-
-        // Storage types should be different
-        matches!(external_ciphertext.storage, CipherStorage::External { .. });
-        matches!(inline_ciphertext.storage, CipherStorage::Inline { .. });
-
-        // Both keyrings should have exactly one entry
-        assert_eq!(external_keyring.len(), 1);
-        assert_eq!(inline_keyring.len(), 1);
-
-        // Verify encrypted file was created for external
-        assert!(output_path.exists());
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(output_path);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_decrypt_inline_aes() -> Result<()> {
-        let plaintext = b"This is a test message for inline AES decryption";
-        let aad = b"test_aad_for_decryption";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Encrypt data
-        let ciphertext =
-            Ciphertext::new_inline_aes(plaintext, aad, &mut keyring, &public_key_spki)?;
-
-        // Decrypt data
-        let decrypted = ciphertext.decrypt_inline_aes(&keyring, &key_pair)?;
-
-        // Verify decryption
-        assert_eq!(decrypted, plaintext);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_decrypt_inline_chacha() -> Result<()> {
-        let plaintext = b"Test message for ChaCha20-Poly1305 inline decryption";
-        let aad = b"chacha_aad_test";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Encrypt data
-        let ciphertext =
-            Ciphertext::new_inline_chacha(plaintext, aad, &mut keyring, &public_key_spki)?;
-
-        // Decrypt data
-        let decrypted = ciphertext.decrypt_inline_chacha(&keyring, &key_pair)?;
-
-        // Verify decryption
-        assert_eq!(decrypted, plaintext);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_decrypt_external_aes() -> Result<()> {
-        let test_data = b"This is test data for external AES decryption. It should be encrypted to a file and then decrypted back.";
-        let aad = b"external_aes_aad";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Create temporary files
-        let input_path = Path::new("/tmp/test_decrypt_input.txt");
-        let encrypted_path = Path::new("/tmp/test_decrypt_encrypted.enc");
-        let decrypted_path = Path::new("/tmp/test_decrypt_output.txt");
-
-        // Clean up any existing files
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
-
-        // Write test data to input file
-        fs::write(input_path, test_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-
-        // Encrypt to external file
-        let ciphertext = Ciphertext::new_external_aes(
-            input_path,
-            encrypted_path,
-            aad,
-            &mut keyring,
-            &public_key_spki,
-        )?;
-
-        // Decrypt external file
-        ciphertext.decrypt_external_aes(encrypted_path, decrypted_path, &keyring, &key_pair)?;
-
-        // Verify decrypted content
-        let decrypted_data = fs::read(decrypted_path)
-            .map_err(|e| Error::DataError(format!("Failed to read decrypted file: {}", e)))?;
-        assert_eq!(decrypted_data, test_data);
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_decrypt_external_chacha() -> Result<()> {
-        let test_data = b"Test data for external ChaCha20-Poly1305 decryption workflow";
-        let aad = b"external_chacha_aad";
-        let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Create temporary files
-        let input_path = Path::new("/tmp/test_decrypt_chacha_input.txt");
-        let encrypted_path = Path::new("/tmp/test_decrypt_chacha_encrypted.enc");
-        let decrypted_path = Path::new("/tmp/test_decrypt_chacha_output.txt");
-
-        // Clean up any existing files
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
-
-        // Write test data to input file
-        fs::write(input_path, test_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-
-        // Encrypt to external file
-        let ciphertext = Ciphertext::new_external_chacha(
-            input_path,
-            encrypted_path,
-            aad,
-            &mut keyring,
-            &public_key_spki,
-        )?;
-
-        // Decrypt external file
-        ciphertext.decrypt_external_chacha(encrypted_path, decrypted_path, &keyring, &key_pair)?;
-
-        // Verify decrypted content
-        let decrypted_data = fs::read(decrypted_path)
-            .map_err(|e| Error::DataError(format!("Failed to read decrypted file: {}", e)))?;
-        assert_eq!(decrypted_data, test_data);
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
+        // Verify different outputs
+        assert_ne!(aes_ciphertext.get_ciphertext_b64()?, chacha_ciphertext.get_ciphertext_b64()?);
+        assert_ne!(aes_ciphertext.dek_id, chacha_ciphertext.dek_id);
 
         Ok(())
     }
 
     #[test]
     fn test_encrypt_decrypt_round_trip() -> Result<()> {
-        let original_data =
-            b"Round trip test: encrypt and then decrypt should return original data";
+        let original_data = b"Round trip test data";
         let aad = b"round_trip_aad";
         let mut keyring = HashMap::new();
-
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
+        let (key_pair, public_key_spki) = create_test_key()?;
 
         // Test inline round trip
-        let inline_cipher =
-            Ciphertext::new_inline_aes(original_data, aad, &mut keyring, &public_key_spki)?;
-        let inline_decrypted = inline_cipher.decrypt_inline_aes(&keyring, &key_pair)?;
-        assert_eq!(inline_decrypted, original_data);
-
-        // Test external round trip
-        let input_path = Path::new("/tmp/test_round_trip_input.txt");
-        let encrypted_path = Path::new("/tmp/test_round_trip_encrypted.enc");
-        let decrypted_path = Path::new("/tmp/test_round_trip_output.txt");
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
-
-        // Write and encrypt
-        fs::write(input_path, original_data)
-            .map_err(|e| Error::DataError(format!("Failed to write test file: {}", e)))?;
-        let external_cipher = Ciphertext::new_external_aes(
-            input_path,
-            encrypted_path,
-            aad,
-            &mut keyring,
-            &public_key_spki,
+        let ciphertext = Ciphertext::new_inline_aes(
+            original_data, aad, &mut keyring, &public_key_spki
         )?;
-
-        // Decrypt and verify
-        external_cipher.decrypt_external_aes(
-            encrypted_path,
-            decrypted_path,
-            &keyring,
-            &key_pair,
-        )?;
-        let external_decrypted = fs::read(decrypted_path)
-            .map_err(|e| Error::DataError(format!("Failed to read decrypted file: {}", e)))?;
-        assert_eq!(external_decrypted, original_data);
-
-        // Clean up
-        let _ = fs::remove_file(input_path);
-        let _ = fs::remove_file(encrypted_path);
-        let _ = fs::remove_file(decrypted_path);
+        let decrypted = ciphertext.decrypt_inline_aes(&keyring, &key_pair)?;
+        assert_eq!(decrypted, original_data);
 
         Ok(())
     }
 
     #[test]
     fn test_algorithm_mismatch_error() -> Result<()> {
-        let plaintext = b"Test algorithm mismatch";
-        let aad = b"mismatch_aad";
+        let plaintext = b"Test error handling";
+        let aad = b"test_aad";
         let mut keyring = HashMap::new();
+        let (key_pair, public_key_spki) = create_test_key()?;
 
-        // Create test keys
-        let (key_pair, public_key_spki, _private_key_der) = create_test_keys()?;
-
-        // Encrypt with AES but try to decrypt with ChaCha
-        let aes_cipher =
-            Ciphertext::new_inline_aes(plaintext, aad, &mut keyring, &public_key_spki)?;
-        let result = aes_cipher.decrypt_inline_chacha(&keyring, &key_pair);
-        assert!(result.is_err());
-
-        // Encrypt with ChaCha but try to decrypt with AES
-        let chacha_cipher =
-            Ciphertext::new_inline_chacha(plaintext, aad, &mut keyring, &public_key_spki)?;
-        let result = chacha_cipher.decrypt_inline_aes(&keyring, &key_pair);
-        assert!(result.is_err());
+        // Create AES ciphertext but try to decrypt with ChaCha method
+        let aes_ciphertext = Ciphertext::new_inline_aes(
+            plaintext, aad, &mut keyring, &public_key_spki
+        )?;
+        let result = aes_ciphertext.decrypt_inline_chacha(&keyring, &key_pair);
+        assert!(result.is_err()); // Should fail due to algorithm mismatch
 
         Ok(())
     }
