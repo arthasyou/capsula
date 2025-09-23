@@ -69,6 +69,30 @@ pub fn encrypt_dek_with_algorithm(
     }
 }
 
+/// 根据算法类型解密DEK
+pub fn decrypt_dek_with_algorithm(
+    encrypted_dek: &[u8],
+    algorithm_name: &str,
+    private_key_der: &[u8],
+) -> Result<Vec<u8>> {
+    match algorithm_name {
+        "RSA" => {
+            // 解析RSA私钥并解密
+            let rsa_key = crate::asymmetric::rsa::Rsa::from_pkcs8_der(private_key_der)
+                .map_err(|e| Error::Other(format!("Failed to parse RSA private key: {}", e)))?;
+
+            let decrypted_dek = rsa_key.decrypt(encrypted_dek)
+                .map_err(|e| Error::Other(format!("RSA decryption failed: {}", e)))?;
+
+            Ok(decrypted_dek)
+        }
+        _ => Err(Error::Other(format!(
+            "Unsupported algorithm for DEK decryption: {}",
+            algorithm_name
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pkcs8::spki::AlgorithmIdentifierRef;
