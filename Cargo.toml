@@ -37,6 +37,8 @@ members = [
     "crates/capsula-key",
     "crates/capsula-wasm",
     "crates/capsula-ffi",
+    "crates/capsula-core",
+    "crates/capsula-bank",
 ]
 
 [workspace.package]
