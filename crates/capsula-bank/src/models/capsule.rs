@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use utoipa::ToSchema;
 
 /// 数据胶囊存储记录
 /// 简化设计，只保留必要的查询字段
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CapsuleRecord {
     // ===== Header 核心字段（用于查询） =====
     /// 胶囊唯一标识符（主键）
@@ -31,11 +33,11 @@ pub struct CapsuleRecord {
     // ===== 完整的胶囊数据（JSON存储） =====
     /// 完整的胶囊数据，包含所有组件
     /// 包括：header, aad_binding, policy, keyring, payload, integrity等
-    pub capsule_data: serde_json::Value,
+    pub capsule_data: Value,
 
     /// 自定义元数据（可选）
     /// 用于索引和检索的额外信息
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 }
 
 impl CapsuleRecord {
