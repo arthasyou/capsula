@@ -1,5 +1,6 @@
 pub mod atomic_permissions;
 pub mod molecular_permissions;
+pub mod token;
 pub mod user;
 
 use std::sync::LazyLock;
@@ -56,6 +57,9 @@ pub async fn create_tables() -> Result<()> {
 
     // Create molecular permissions table (分子权限组合)
     create_molecular_permissions_table().await?;
+    
+    // Create token table (令牌管理)
+    token::create_token_table().await?;
 
     Ok(())
 }
