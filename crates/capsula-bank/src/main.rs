@@ -1,6 +1,6 @@
 use capsula_bank::{
     db::{create_tables, init_db},
-    logging::init_tracing_to_file,
+    logging::init_tracing,
     routes,
     settings::Settings,
 };
@@ -8,7 +8,7 @@ use toolcraft_axum_kit::http_server;
 
 #[tokio::main]
 async fn main() {
-    init_tracing_to_file();
+    init_tracing();
     let settings = Settings::load("config/services.toml").unwrap();
 
     // Initialize database for certificate storage

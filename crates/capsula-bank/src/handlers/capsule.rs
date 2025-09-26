@@ -48,7 +48,7 @@ pub struct SearchParams {
 /// Create a new capsule
 #[utoipa::path(
     post,
-    path = "/capsule",
+    path = "/",
     request_body = CreateCapsuleRequest,
     responses(
         (status = 201, description = "Capsule created successfully", body = CapsuleResponse),
@@ -61,8 +61,9 @@ pub async fn create_capsule(
     Json(payload): Json<CreateCapsuleRequest>,
 ) -> Result<(StatusCode, Json<CapsuleResponse>)> {
     // Extract capsule information from the provided JSON data
-    let capsule_record = CapsuleRecord::from_json(payload.capsule_data.clone(), payload.owner_id)
-        .ok_or_else(|| AppError::BadRequest("Invalid capsule data format".into()))?;
+    let capsule_record =
+        CapsuleRecord::from_json(payload.capsule_data.clone(), payload.owner_id)
+            .ok_or_else(|| AppError::BadRequest("Invalid capsule data format".into()))?;
 
     // Create the capsule in the database
     match capsule::create_capsule(capsule_record).await {
@@ -76,7 +77,10 @@ pub async fn create_capsule(
         )),
         Err(e) => {
             tracing::error!("Failed to create capsule: {:?}", e);
-            Err(AppError::Internal(format!("Failed to create capsule: {}", e)))
+            Err(AppError::Internal(format!(
+                "Failed to create capsule: {}",
+                e
+            )))
         }
     }
 }
@@ -84,7 +88,7 @@ pub async fn create_capsule(
 /// Get a capsule by ID
 #[utoipa::path(
     get,
-    path = "/capsule/{id}",
+    path = "/{id}",
     params(
         ("id" = String, Path, description = "Capsule ID")
     ),
@@ -117,7 +121,7 @@ pub async fn get_capsule_by_id(Path(id): Path<String>) -> Result<Json<CapsuleRes
 /// Get capsules by owner ID
 #[utoipa::path(
     get,
-    path = "/capsule/owner/{owner_id}",
+    path = "/owner/{owner_id}",
     params(
         ("owner_id" = String, Path, description = "Owner ID")
     ),
@@ -153,7 +157,7 @@ pub async fn get_capsules_by_owner(
 /// Search capsules with filters
 #[utoipa::path(
     get,
-    path = "/capsule/search",
+    path = "/search",
     params(
         SearchParams
     ),
@@ -184,7 +188,10 @@ pub async fn search_capsules(
         }
         Err(e) => {
             tracing::error!("Failed to search capsules: {:?}", e);
-            Err(AppError::Internal(format!("Failed to search capsules: {}", e)))
+            Err(AppError::Internal(format!(
+                "Failed to search capsules: {}",
+                e
+            )))
         }
     }
 }

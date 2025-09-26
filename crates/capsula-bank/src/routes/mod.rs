@@ -12,12 +12,6 @@ use crate::routes::capsule::CapsuleApi;
     nest(
          (path = "/capsule", api = CapsuleApi),
     ),
-    paths(
-        crate::handlers::capsule::create_capsule,
-        crate::handlers::capsule::get_capsule_by_id,
-        crate::handlers::capsule::get_capsules_by_owner,
-        crate::handlers::capsule::search_capsules,
-    )
 )]
 struct ApiDoc;
 
