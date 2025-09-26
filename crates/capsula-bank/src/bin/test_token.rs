@@ -32,12 +32,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 生成令牌ID和哈希（实际应用中应该使用加密库生成安全的令牌）
     let token_id = format!("tok_{}", Uuid::new_v4().to_string());
     let token_hash = format!("hash_{}", Uuid::new_v4().to_string()); // 实际应该是真实令牌的哈希值
+    let capsule_id = format!("cap_{}", Uuid::new_v4().to_string()); // 模拟的胶囊ID
     
     // 创建令牌对象
     let test_token = Token::new(
         token_id.clone(),
         token_hash,
         TokenType::Access,
+        capsule_id.clone(), // 关联的胶囊ID
         "ownership",  // 使用所有权分子权限作为授权ID
         "user_001",    // 测试用户ID
         "capsula-bank", // 颁发者
@@ -58,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("令牌详情：");
     println!("  ID: {}", created_token.token_id);
     println!("  类型: {:?}", created_token.token_type);
+    println!("  胶囊ID: {}", created_token.capsule_id);
     println!("  持有者: {}", created_token.subject_id);
     println!("  授权ID: {}", created_token.grant_id);
     println!("  过期时间: {}", 
@@ -101,14 +104,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_tokens = token::get_active_tokens_by_subject("user_001").await?;
     println!("✅ 用户 user_001 有 {} 个活跃令牌", user_tokens.len());
     for (i, t) in user_tokens.iter().enumerate() {
-        println!("  {}. {} - 类型: {:?}, 过期: {}", 
+        println!("  {}. {} - 胶囊: {}, 类型: {:?}, 过期: {}", 
             i + 1, 
-            t.token_id, 
+            t.token_id,
+            t.capsule_id,
             t.token_type,
             chrono::DateTime::from_timestamp(t.expires_at, 0)
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| "Invalid".to_string())
         );
+    }
+    
+    // 查询特定胶囊的所有令牌
+    println!("\n📋 查询胶囊 {} 的所有令牌...", capsule_id);
+    let capsule_tokens = token::get_tokens_by_capsule(&capsule_id).await?;
+    println!("✅ 胶囊有 {} 个令牌", capsule_tokens.len());
+    
+    // 查询用户对特定胶囊的访问令牌
+    println!("\n📋 查询用户对胶囊的访问权限...");
+    if let Some(access_token) = token::get_token_for_capsule_access("user_001", &capsule_id).await? {
+        println!("✅ 用户有访问权限，令牌ID: {}", access_token.token_id);
+        println!("  权限范围: {:?}", access_token.scopes);
+    } else {
+        println!("❌ 用户没有该胶囊的访问权限");
     }
     
     println!("\n========================================");

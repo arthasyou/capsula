@@ -18,6 +18,7 @@ pub async fn create_token_table() -> Result<()> {
         DEFINE FIELD IF NOT EXISTS token_hash       ON TABLE tokens TYPE string ASSERT $value != NONE AND $value != "";
         DEFINE FIELD IF NOT EXISTS token_type       ON TABLE tokens TYPE string 
             ASSERT $value IN ['access', 'refresh', 'api_key', 'session_token'];
+        DEFINE FIELD IF NOT EXISTS capsule_id       ON TABLE tokens TYPE string ASSERT $value != NONE AND $value != "";
         DEFINE FIELD IF NOT EXISTS grant_id         ON TABLE tokens TYPE string ASSERT $value != NONE AND $value != "";
         DEFINE FIELD IF NOT EXISTS subject_id       ON TABLE tokens TYPE string ASSERT $value != NONE AND $value != "";
         DEFINE FIELD IF NOT EXISTS issuer           ON TABLE tokens TYPE string ASSERT $value != NONE AND $value != "";
@@ -36,6 +37,7 @@ pub async fn create_token_table() -> Result<()> {
         -- ---------------------
         DEFINE INDEX IF NOT EXISTS token_id_idx         ON TABLE tokens COLUMNS token_id UNIQUE;
         DEFINE INDEX IF NOT EXISTS token_hash_idx       ON TABLE tokens COLUMNS token_hash UNIQUE;
+        DEFINE INDEX IF NOT EXISTS capsule_id_idx       ON TABLE tokens COLUMNS capsule_id;
         DEFINE INDEX IF NOT EXISTS subject_id_idx       ON TABLE tokens COLUMNS subject_id;
         DEFINE INDEX IF NOT EXISTS grant_id_idx         ON TABLE tokens COLUMNS grant_id;
         DEFINE INDEX IF NOT EXISTS expires_at_idx       ON TABLE tokens COLUMNS expires_at;
@@ -45,6 +47,8 @@ pub async fn create_token_table() -> Result<()> {
         -- 复合索引：用于查询特定用户的有效令牌
         DEFINE INDEX IF NOT EXISTS subject_status_idx   ON TABLE tokens COLUMNS subject_id, status;
         DEFINE INDEX IF NOT EXISTS grant_status_idx     ON TABLE tokens COLUMNS grant_id, status;
+        DEFINE INDEX IF NOT EXISTS capsule_status_idx  ON TABLE tokens COLUMNS capsule_id, status;
+        DEFINE INDEX IF NOT EXISTS subject_capsule_idx ON TABLE tokens COLUMNS subject_id, capsule_id;
     "#;
 
     let db = get_db();
@@ -107,6 +111,31 @@ pub async fn get_tokens_by_grant(grant_id: &str) -> Result<Vec<Token>> {
     Ok(tokens)
 }
 
+/// 查询特定胶囊的所有令牌
+pub async fn get_tokens_by_capsule(capsule_id: &str) -> Result<Vec<Token>> {
+    let db = get_db();
+    let query = "SELECT * FROM tokens WHERE capsule_id = $capsule_id";
+    let mut response = db
+        .query(query)
+        .bind(("capsule_id", capsule_id.to_string()))
+        .await?;
+    let tokens: Vec<Token> = response.take(0)?;
+    Ok(tokens)
+}
+
+/// 查询用户对特定胶囊的令牌
+pub async fn get_token_for_capsule_access(subject_id: &str, capsule_id: &str) -> Result<Option<Token>> {
+    let db = get_db();
+    let query = "SELECT * FROM tokens WHERE subject_id = $subject_id AND capsule_id = $capsule_id AND status = 'active' AND expires_at > time::unix()";
+    let mut response = db
+        .query(query)
+        .bind(("subject_id", subject_id.to_string()))
+        .bind(("capsule_id", capsule_id.to_string()))
+        .await?;
+    let tokens: Vec<Token> = response.take(0)?;
+    Ok(tokens.into_iter().next())
+}
+
 /// 更新令牌（使用后更新）
 pub async fn update_token(token: &Token) -> Result<Token> {
     let db = get_db();
@@ -162,6 +191,16 @@ pub async fn revoke_all_tokens_for_grant(grant_id: &str) -> Result<()> {
     let query = "UPDATE tokens SET status = 'revoked' WHERE grant_id = $grant_id";
     db.query(query)
         .bind(("grant_id", grant_id.to_string()))
+        .await?;
+    Ok(())
+}
+
+/// 撤销特定胶囊的所有令牌
+pub async fn revoke_all_tokens_for_capsule(capsule_id: &str) -> Result<()> {
+    let db = get_db();
+    let query = "UPDATE tokens SET status = 'revoked' WHERE capsule_id = $capsule_id";
+    db.query(query)
+        .bind(("capsule_id", capsule_id.to_string()))
         .await?;
     Ok(())
 }

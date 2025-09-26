@@ -33,6 +33,9 @@ pub struct Token {
     /// 令牌类型
     pub token_type: TokenType,
     
+    /// 关联的数据胶囊ID
+    pub capsule_id: String,
+    
     /// 关联的权限授权ID（可以是分子权限ID）
     pub grant_id: String,
     
@@ -73,6 +76,7 @@ impl Token {
         token_id: impl Into<String>,
         token_hash: impl Into<String>,
         token_type: TokenType,
+        capsule_id: impl Into<String>,
         grant_id: impl Into<String>,
         subject_id: impl Into<String>,
         issuer: impl Into<String>,
@@ -82,6 +86,7 @@ impl Token {
             token_id: token_id.into(),
             token_hash: token_hash.into(),
             token_type,
+            capsule_id: capsule_id.into(),
             grant_id: grant_id.into(),
             subject_id: subject_id.into(),
             issuer: issuer.into(),
