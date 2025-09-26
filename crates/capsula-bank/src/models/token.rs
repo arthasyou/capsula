@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// 令牌状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum TokenStatus {
     Active,   // 活跃可用
@@ -11,7 +12,7 @@ pub enum TokenStatus {
 }
 
 /// 令牌类型
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TokenType {
     Access,      // 访问令牌
@@ -22,7 +23,7 @@ pub enum TokenType {
 
 /// 令牌模型
 /// 用于存储和验证各种类型的令牌
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Token {
     /// 令牌唯一标识符
     pub token_id: String,

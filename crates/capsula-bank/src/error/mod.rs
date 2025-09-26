@@ -33,6 +33,18 @@ pub enum AppError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("internal server error: {0}")]
+    InternalServerError(String),
+
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+
+    #[error("serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
 }
 
 impl IntoResponse for AppError {
@@ -44,7 +56,11 @@ impl IntoResponse for AppError {
             AppError::NotFound(ref e) => (StatusCode::NOT_FOUND, e.to_string()),
             AppError::BadRequest(ref e) => (StatusCode::BAD_REQUEST, e.to_string()),
             AppError::Internal(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            AppError::InternalServerError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::DbError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            AppError::Unauthorized(ref e) => (StatusCode::UNAUTHORIZED, e.to_string()),
+            AppError::Forbidden(ref e) => (StatusCode::FORBIDDEN, e.to_string()),
+            AppError::SerializationError(ref e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         };
 
         let body = Json(json!({
