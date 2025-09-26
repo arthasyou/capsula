@@ -1,18 +1,10 @@
-mod db;
-mod error;
-mod handlers;
-mod logging;
-mod models;
-mod routes;
-mod settings;
-
-use settings::Settings;
-use toolcraft_axum_kit::http_server;
-
-use crate::{
+use capsula_bank::{
     db::{create_tables, init_db},
     logging::init_tracing_to_file,
+    routes,
+    settings::Settings,
 };
+use toolcraft_axum_kit::http_server;
 
 #[tokio::main]
 async fn main() {
@@ -31,9 +23,7 @@ async fn main() {
                 "Database initialization failed: {}. Continuing without database.",
                 e
             );
-            tracing::warn!(
-                "Some certificate storage features may not work without database connection"
-            );
+            tracing::warn!("Some features may not work without database connection");
         }
     }
 

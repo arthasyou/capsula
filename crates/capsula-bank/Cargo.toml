@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["ancient <gamesworldcraft@gmail.com>"]
 description = "Capsula Banking server with REST API"
+default-run = "capsula-bank"
 
 [dependencies]
 # Capsula crates

@@ -1,3 +1,1 @@
-pub mod ca;
-pub mod certificate;
-pub mod user;
+pub mod permission;
