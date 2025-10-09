@@ -453,7 +453,7 @@ impl Capsule {
     ///
     /// 根据载荷类型提供统一的解封接口
     /// 注意：对于Cap0，需要单独处理外部存储的解封
-    pub fn unseal_payload<T>(&self, keyring: &Keyring, decryption_key: &T) -> Result<CapsuleContent>
+    pub fn unseal_payload<T>(&self, decryption_key: &T) -> Result<CapsuleContent>
     where
         T: Key + KeyEncDec,
     {
@@ -466,7 +466,7 @@ impl Capsule {
                 ))
             }
             CapsulePayload::Cap1(cap1) => {
-                let (meta_data, bnf_data) = cap1.unseal(keyring, decryption_key)?;
+                let (meta_data, bnf_data) = cap1.unseal(&self.keyring, decryption_key)?;
                 Ok(CapsuleContent::Cap1Content {
                     cap0_id: cap1.cap0_id.clone(),
                     meta_data,
