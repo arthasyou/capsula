@@ -73,6 +73,22 @@ pub async fn get_capsules_by_owner(owner_id: &str) -> Result<Vec<CapsuleRecord>>
     Ok(capsules)
 }
 
+/// 根据所有者和ID列表查询胶囊
+pub async fn get_capsules_by_owner_and_ids(
+    owner_id: &str,
+    capsule_ids: &[String],
+) -> Result<Vec<CapsuleRecord>> {
+    let db = get_db();
+    let query = "SELECT * FROM capsules WHERE owner_id = $owner_id AND capsule_id IN $capsule_ids ORDER BY created_at DESC";
+    let mut response = db
+        .query(query)
+        .bind(("owner_id", owner_id.to_string()))
+        .bind(("capsule_ids", capsule_ids.to_vec()))
+        .await?;
+    let capsules: Vec<CapsuleRecord> = response.take(0)?;
+    Ok(capsules)
+}
+
 /// 查询特定类型的胶囊
 pub async fn get_capsules_by_type(content_type: &str) -> Result<Vec<CapsuleRecord>> {
     let db = get_db();

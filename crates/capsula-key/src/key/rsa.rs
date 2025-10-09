@@ -3,8 +3,8 @@ use capsula_crypto::Rsa;
 use pkcs8::spki::AlgorithmIdentifierOwned;
 
 use super::{
-    Algorithm, ExportablePrivateKey, Key, KeyCapabilities, KeyEncDec, KeyExportInfo, KeyFileIO, KeySign,
-    KeyUsage, PublicKeyExportInfo, PublicKeySet,
+    Algorithm, ExportablePrivateKey, Key, KeyCapabilities, KeyEncDec, KeyExportInfo, KeyFileIO,
+    KeySign, KeyUsage, PublicKeyExportInfo, PublicKeySet,
 };
 use crate::error::{Error, Result};
 
@@ -143,7 +143,7 @@ impl KeySign for RsaKey {
 }
 
 // ============================================================================
-// KeyEncDec Trait Implementation  
+// KeyEncDec Trait Implementation
 // ============================================================================
 
 impl KeyEncDec for RsaKey {
@@ -153,13 +153,14 @@ impl KeyEncDec for RsaKey {
         capsula_crypto::asymmetric::rsa::encrypt(&public_key, plaintext)
             .map_err(|e| Error::CryptoError(e))
     }
-    
+
     /// Decrypt data using RSA private key with PKCS1v15 padding
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        self.inner.decrypt(ciphertext)
+        self.inner
+            .decrypt(ciphertext)
             .map_err(|e| Error::CryptoError(e))
     }
-    
+
     /// Get encryption algorithm identifier for RSA-PKCS1v15
     fn encryption_algorithm_id(&self) -> AlgorithmIdentifierOwned {
         AlgorithmIdentifierOwned {
@@ -202,7 +203,7 @@ impl KeyFileIO for RsaKey {
 
         // Export private key
         let private_pem = self.to_pkcs8_pem()?;
-        let private_path = base_path.join(format!("{}.key", name_prefix));
+        let private_path = base_path.join(format!("{}_private.pem", name_prefix));
         std::fs::write(&private_path, private_pem).map_err(Error::IoError)?;
 
         // Export public key
@@ -210,7 +211,7 @@ impl KeyFileIO for RsaKey {
             .inner
             .to_spki_pem()
             .map_err(|e| Error::ExportError(format!("RSA public PEM export failed: {}", e)))?;
-        let public_path = base_path.join(format!("{}.pub", name_prefix));
+        let public_path = base_path.join(format!("{}_public.pem", name_prefix));
         std::fs::write(&public_path, &public_pem).map_err(Error::IoError)?;
 
         Ok(KeyExportInfo {
