@@ -1,7 +1,6 @@
 pub mod atomic_permissions;
 pub mod capsule;
 pub mod molecular_permissions;
-pub mod operations;
 pub mod token;
 pub mod user;
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test authorization API endpoints
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:16022"
 
 echo "Testing Authorization API Endpoints"
 echo "===================================="

@@ -1,16 +1,15 @@
 use axum::{extract::Query, http::StatusCode, response::Json};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest as Sha2Digest, Sha256};
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 use crate::{
-    db::operations::{
-        grant_permission as db_grant_permission, list_tokens as db_list_tokens,
-        revoke_token as db_revoke_token, use_token as db_use_token, GrantRequest, RevokeRequest,
-        UseTokenRequest,
-    },
+    db::token as db_token,
     error::{AppError, Result},
-    models::token::Token,
+    models::token::{Token, TokenType},
 };
 
 /// Request to grant permission to a capsule
@@ -104,25 +103,62 @@ pub async fn grant_permission(
         ));
     }
 
-    // Create the grant request for database
-    let grant_request = GrantRequest {
-        capsule_id: request.capsule_id.clone(),
-        grantee: request.grantee.clone(),
-        permissions: request.permissions.clone(),
-        expires_at: request.expires_at.clone(),
-        metadata: request.metadata.clone(),
+    // Generate token ID and raw token
+    let token_id = Uuid::new_v4().to_string();
+    let raw_token = generate_secure_token();
+    let token_hash = hash_token(&raw_token);
+
+    // Calculate expiration time (default to 30 days if not specified)
+    let expires_at = if let Some(exp_str) = request.expires_at {
+        // Parse ISO 8601 datetime
+        chrono::DateTime::parse_from_rfc3339(&exp_str)
+            .map_err(|e| AppError::BadRequest(format!("Invalid datetime: {}", e)))?
+            .timestamp()
+    } else {
+        // Default to 30 days from now
+        Utc::now().timestamp() + (30 * 24 * 60 * 60)
     };
 
+    // Create grant ID (this would normally link to a molecular permission)
+    let grant_id = format!("grant_{}", Uuid::new_v4());
+
+    // Create the token
+    let mut token = Token::new(
+        token_id.clone(),
+        token_hash,
+        TokenType::Access,
+        request.capsule_id.clone(),
+        grant_id,
+        request.grantee.clone(),
+        "capsula-bank".to_string(),
+        expires_at,
+    );
+
+    // Set permissions as scopes
+    token = token.with_scopes(request.permissions.clone());
+
+    // Add metadata if provided
+    if let Some(metadata) = request.metadata {
+        token.metadata = Some(metadata);
+    }
+
     // Store the token in the database
-    match db_grant_permission(grant_request).await {
-        Ok(token) => {
+    match db_token::create_token(token.clone()).await {
+        Ok(created_token) => {
+            // Return the token with the raw token value in metadata for the user
+            let mut return_token = created_token;
+            return_token.metadata = Some(serde_json::json!({
+                "raw_token": raw_token,
+                "original_metadata": token.metadata
+            }));
+
             let response = PermissionResponse {
                 success: true,
                 message: format!(
                     "Permission granted for capsule {} to {}",
                     request.capsule_id, request.grantee
                 ),
-                token: Some(token),
+                token: Some(return_token),
                 allowed: None,
             };
             Ok((StatusCode::CREATED, Json(response)))
@@ -157,30 +193,60 @@ pub async fn use_token(
         return Err(AppError::BadRequest("Operation is required".to_string()));
     }
 
-    // Create the use token request for database
-    let use_request = UseTokenRequest {
-        token: request.token.clone(),
-        operation: request.operation.clone(),
-        capsule_id: request.capsule_id.clone(),
+    // Hash the provided token to compare with stored hash
+    let token_hash = hash_token(&request.token);
+
+    // Find the token by hash
+    let mut token = match db_token::get_token_by_hash(&token_hash).await? {
+        Some(t) => t,
+        None => return Err(AppError::NotFound("Token not found".to_string())),
     };
 
-    // Validate and use the token
-    match db_use_token(use_request).await {
-        Ok((allowed, token)) => {
-            let response = PermissionResponse {
-                success: allowed,
-                message: if allowed {
-                    format!("Token is valid for operation: {}", request.operation)
-                } else {
-                    format!("Token does not allow operation: {}", request.operation)
-                },
-                token: Some(token),
-                allowed: Some(allowed),
-            };
-            Ok((StatusCode::OK, Json(response)))
+    // Check if token is valid
+    if !token.is_valid() {
+        if token.is_expired() {
+            return Err(AppError::Unauthorized("Token has expired".to_string()));
         }
-        Err(e) => Err(e),
+        return Err(AppError::Unauthorized("Token is not valid".to_string()));
     }
+
+    // Check if capsule_id matches (if provided)
+    if let Some(capsule_id) = &request.capsule_id {
+        if &token.capsule_id != capsule_id {
+            return Err(AppError::Forbidden(
+                "Token does not grant access to this capsule".to_string(),
+            ));
+        }
+    }
+
+    // Check if the operation is allowed by the token's scopes
+    let operation_allowed = token.scopes.iter().any(|scope| {
+        scope == &request.operation
+            || scope == "admin"
+            || scope == "*"
+            || (scope == "read" && request.operation.starts_with("read"))
+            || (scope == "write"
+                && (request.operation.starts_with("write")
+                    || request.operation.starts_with("create")))
+    });
+
+    // Use the token (decrement remaining uses if applicable)
+    if operation_allowed && token.use_token() {
+        // Update the token in the database
+        db_token::update_token(&token).await?;
+    }
+
+    let response = PermissionResponse {
+        success: operation_allowed,
+        message: if operation_allowed {
+            format!("Token is valid for operation: {}", request.operation)
+        } else {
+            format!("Token does not allow operation: {}", request.operation)
+        },
+        token: Some(token),
+        allowed: Some(operation_allowed),
+    };
+    Ok((StatusCode::OK, Json(response)))
 }
 
 /// Revoke a permission token
@@ -205,14 +271,8 @@ pub async fn revoke_permission(
         return Err(AppError::BadRequest("Token ID is required".to_string()));
     }
 
-    // Create the revoke request for database
-    let revoke_request = RevokeRequest {
-        token_id: request.token_id.clone(),
-        reason: request.reason.clone(),
-    };
-
     // Revoke the token
-    match db_revoke_token(revoke_request).await {
+    match db_token::revoke_token(&request.token_id).await {
         Ok(_) => {
             let response = PermissionResponse {
                 success: true,
@@ -224,6 +284,21 @@ pub async fn revoke_permission(
         }
         Err(e) => Err(e),
     }
+}
+
+/// Generate a secure random token
+fn generate_secure_token() -> String {
+    use base64::Engine;
+    let token_bytes: [u8; 32] = rand::random();
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(token_bytes)
+}
+
+/// Hash a token using SHA-256
+fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    let result = hasher.finalize();
+    hex::encode(result)
 }
 
 /// List all permissions for a capsule or grantee
@@ -240,18 +315,25 @@ pub async fn revoke_permission(
 pub async fn list_permissions(
     Query(params): Query<ListPermissionsParams>,
 ) -> Result<(StatusCode, Json<TokenListResponse>)> {
-    match db_list_tokens(
-        params.capsule_id,
-        params.grantee,
-        params.active_only.unwrap_or(true),
-    )
-    .await
-    {
-        Ok(tokens) => {
-            let total = tokens.len();
-            let response = TokenListResponse { tokens, total };
-            Ok((StatusCode::OK, Json(response)))
+    // Get tokens based on query parameters
+    let tokens = if let Some(capsule_id) = params.capsule_id {
+        db_token::get_tokens_by_capsule(&capsule_id).await?
+    } else if let Some(grantee) = params.grantee {
+        if params.active_only.unwrap_or(true) {
+            db_token::get_active_tokens_by_subject(&grantee).await?
+        } else {
+            // Get all tokens for this subject (not just active)
+            // Note: token.rs doesn't have this function, so we use get_active_tokens_by_subject for now
+            db_token::get_active_tokens_by_subject(&grantee).await?
         }
-        Err(e) => Err(e),
-    }
+    } else {
+        // No filters provided, return empty list or error
+        return Err(AppError::BadRequest(
+            "Please provide either capsule_id or grantee filter".to_string(),
+        ));
+    };
+
+    let total = tokens.len();
+    let response = TokenListResponse { tokens, total };
+    Ok((StatusCode::OK, Json(response)))
 }

@@ -82,16 +82,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 10. 显示Capsule信息
     println!("\n=== Capsule数据胶囊信息 ===");
-    println!("胶囊ID: {}", capsule.header.id);
-    println!("胶囊版本: {}", capsule.header.version);
-    println!("胶囊阶段: {:?}", capsule.header.stage);
-    println!("内容类型: {}", capsule.header.content_type);
-    println!("创建时间: {}", capsule.header.created_at);
-    println!("创建者: {:?}", capsule.header.creator);
-    println!("载荷类型: {}", capsule.get_payload_type());
-    println!("策略URI: {}", capsule.policy.policy_uri);
-    println!("权限列表: {:?}", capsule.policy.permissions);
-    println!("密钥环大小: {} 个密钥", capsule.keyring.len());
+    println!("1阶胶囊: {:#?}", capsule);
+    // println!("胶囊版本: {}", capsule.header.version);
+    // println!("胶囊阶段: {:?}", capsule.header.stage);
+    // println!("内容类型: {}", capsule.header.content_type);
+    // println!("创建时间: {}", capsule.header.created_at);
+    // println!("创建者: {:?}", capsule.header.creator);
+    // println!("载荷类型: {}", capsule.get_payload_type());
+    // println!("策略URI: {}", capsule.policy.policy_uri);
+    // println!("权限列表: {:?}", capsule.policy.permissions);
+    // println!("密钥环大小: {} 个密钥", capsule.keyring.len());
 
     // 显示载荷中Cap1的信息
     if let Some(cap1) = capsule.as_cap1() {
