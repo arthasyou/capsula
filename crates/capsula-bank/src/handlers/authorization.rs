@@ -1,5 +1,6 @@
 use axum::{extract::Query, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{
@@ -24,7 +25,7 @@ pub struct GrantPermissionRequest {
     /// Optional expiration time (ISO 8601 format)
     pub expires_at: Option<String>,
     /// Optional metadata for the grant
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 }
 
 /// Request to use a permission token
