@@ -12,6 +12,7 @@ capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-key = { path = "crates/capsula-key" }
 capsula-crypto = { path = "crates/capsula-crypto" }
+capsula-bank = { path = "crates/capsula-bank" }
 
 # 通用依赖
 serde = { workspace = true }
@@ -25,6 +26,7 @@ time = { workspace = true, features = [
     "parsing",
 ] }
 der = { workspace = true }
+tokio = { version = "1", features = ["full"] }
 
 [workspace]
 resolver = "2"

@@ -7,13 +7,20 @@
 //! - 使用owner_public.pem进行加密（保护数据隐私，只有owner能解密）
 //! - 演示完整的封装和解封流程
 //! - 生成包含解释层信息的完整Capsule结构
+//! - 将胶囊插入数据库
 
 use std::fs;
 
+use capsula_bank::{
+    db::{capsule as db_capsule, init_db},
+    models::capsule::CapsuleRecord,
+    settings::Settings,
+};
 use capsula_core::{Cap1, Capsule, ContentType, Keyring};
 use capsula_key::RsaKey;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Cap1 数据胶囊封装演示 ===\n");
 
     // 1. 准备模拟数据
@@ -80,94 +87,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write("temp/capsule_interpretation.json", &capsule_json)?;
     println!("✓ Capsule胶囊已保存到: temp/capsule_interpretation.json");
 
-    // 10. 显示Capsule信息
-    println!("\n=== Capsule数据胶囊信息 ===");
-    println!("1阶胶囊: {:#?}", capsule);
-    // println!("胶囊版本: {}", capsule.header.version);
-    // println!("胶囊阶段: {:?}", capsule.header.stage);
-    // println!("内容类型: {}", capsule.header.content_type);
-    // println!("创建时间: {}", capsule.header.created_at);
-    // println!("创建者: {:?}", capsule.header.creator);
-    // println!("载荷类型: {}", capsule.get_payload_type());
-    // println!("策略URI: {}", capsule.policy.policy_uri);
-    // println!("权限列表: {:?}", capsule.policy.permissions);
-    // println!("密钥环大小: {} 个密钥", capsule.keyring.len());
+    // 10. 插入数据库
+    println!("\n=== 插入数据库 ===");
 
-    // 显示载荷中Cap1的信息
-    if let Some(cap1) = capsule.as_cap1() {
-        println!("\n=== 载荷Cap1信息 ===");
-        println!("关联的Cap0 ID: {}", cap1.cap0_id);
-        println!("元数据内容类型: {:?}", cap1.meta.content_type);
-        println!("元数据加密后大小: {} 字节", cap1.meta.ciphertext.len);
-        println!("BNF提取数据内容类型: {:?}", cap1.bnf_extract.content_type);
-        println!(
-            "BNF提取数据加密后大小: {} 字节",
-            cap1.bnf_extract.ciphertext.len
-        );
-        println!("包含ZKP证明: {}", cap1.has_zkp_proof());
-        println!("元数据签名算法: {}", cap1.meta.proof.signature.alg);
-        println!(
-            "BNF提取数据签名算法: {}",
-            cap1.bnf_extract.proof.signature.alg
-        );
+    // 加载配置
+    println!("正在加载配置...");
+    let cfg = Settings::load("crates/capsula-bank/config/services.toml")?;
+    println!("✓ 配置加载成功");
 
-        // 显示摘要信息
-        let summary = cap1.get_summary_info();
-        println!("\n=== Cap1摘要信息 ===");
-        println!("关联Cap0 ID: {}", summary.cap0_id);
-        println!("元数据大小: {} 字节", summary.meta_size);
-        println!("BNF提取数据大小: {} 字节", summary.bnf_extract_size);
-        println!("包含ZKP证明: {}", summary.has_zkp_proof);
-        if let Some(created_at) = summary.created_at {
-            println!("创建时间: {}", created_at);
-        }
-    }
+    // 初始化数据库连接
+    println!("\n正在连接数据库...");
+    init_db(cfg.surrealdb).await?;
+    println!("✓ 数据库连接成功");
 
-    // 11. 演示解封Cap1数据
-    println!("\n=== 演示解封Cap1数据 ===");
+    // 将 capsule JSON 字符串转换为 Value
+    let capsule_data: serde_json::Value = serde_json::from_str(&capsule_json)?;
 
-    // 加载所有者私钥用于解密（因为加密时用的是owner公钥）
-    println!("正在加载所有者私钥用于解密...");
-    let owner_private_key = load_owner_private_key()?;
-    println!("✓ 所有者私钥加载成功");
+    // 创建 CapsuleRecord
+    let owner_id = "P001"; // 与元数据中的 Patient 001 对应
+    let capsule_record = CapsuleRecord::from_json(capsule_data, owner_id.to_string())
+        .ok_or("Failed to create CapsuleRecord from JSON")?;
 
-    // 解封胶囊载荷
-    println!("\n正在解封Cap1数据...");
-    match capsule.unseal_payload(&owner_private_key)? {
-        capsula_core::CapsuleContent::Cap1Content {
-            cap0_id,
-            meta_data,
-            bnf_extract_data,
-        } => {
-            println!("✓ Cap1数据解封成功");
-            println!("\n=== 解封后的数据 ===");
-            println!("关联的Cap0 ID: {}", cap0_id);
-            println!("元数据大小: {} 字节", meta_data.len());
-            println!("BNF提取数据大小: {} 字节", bnf_extract_data.len());
+    // 插入数据库（如果已存在则先删除）
+    println!("\n正在插入胶囊到数据库...");
+    let capsule_id = capsule_record.capsule_id.clone();
 
-            // 解析并显示元数据
-            if let Ok(meta_json) = serde_json::from_slice::<serde_json::Value>(&meta_data) {
-                println!("\n=== 元数据内容 ===");
-                println!("{}", serde_json::to_string_pretty(&meta_json)?);
-            }
+    // 尝试删除已存在的记录
+    let _ = db_capsule::delete_capsule(&capsule_id).await;
 
-            // 解析并显示BNF提取数据
-            if let Ok(bnf_json) = serde_json::from_slice::<serde_json::Value>(&bnf_extract_data) {
-                println!("\n=== BNF提取数据内容 ===");
-                println!("{}", serde_json::to_string_pretty(&bnf_json)?);
-            }
-        }
-        _ => {
-            println!("❌ 解封失败：载荷类型不匹配");
-        }
-    }
+    let created = db_capsule::create_capsule(capsule_record).await?;
+    println!("✓ 胶囊插入成功");
+
+    // 显示插入结果
+    println!("\n=== 插入结果 ===");
+    println!("胶囊 ID: {}", created.capsule_id);
+    println!("所有者 ID: {}", created.owner_id);
+    println!("内容类型: {}", created.content_type);
+    println!("版本: {}", created.version);
+    println!("阶段: {}", created.stage);
+    println!("创建时间: {}", created.created_at);
 
     println!("\n=== Cap1数据胶囊封装演示完成 ===");
-    println!("Cap1数据胶囊成功创建并保存为JSON格式！");
+    println!("Cap1数据胶囊成功创建、保存并插入数据库！");
     println!("生成的文件:");
     println!("  - temp/capsule_interpretation.json (完整的Cap1数据胶囊JSON)");
     println!("  - temp/cap1_meta.json (元数据示例)");
     println!("  - temp/cap1_bnf_extract.json (BNF提取数据示例)");
+    println!("\n数据库记录:");
+    println!("  - capsules 表中已插入胶囊记录");
+    println!("  - 胶囊 ID: {}", created.capsule_id);
 
     Ok(())
 }

@@ -19,7 +19,7 @@ pub async fn create_capsule_table() -> Result<()> {
         DEFINE FIELD IF NOT EXISTS owner_id         ON TABLE capsules TYPE string ASSERT $value != NONE AND $value != "";
         
         -- ===== 胶囊完整数据（JSON存储） =====
-        DEFINE FIELD IF NOT EXISTS capsule_data     ON TABLE capsules TYPE object;
+        DEFINE FIELD IF NOT EXISTS capsule_data     ON TABLE capsules FLEXIBLE TYPE object;
         
         -- ===== 自定义元数据（可选） =====
         DEFINE FIELD IF NOT EXISTS metadata         ON TABLE capsules TYPE option<object>;

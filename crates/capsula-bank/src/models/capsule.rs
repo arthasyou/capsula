@@ -96,7 +96,8 @@ impl CapsuleRecord {
         let header = capsule_json.get("header")?;
         let capsule_id = header.get("id")?.as_str()?.to_string();
         let version = header.get("version")?.as_str()?.to_string();
-        let stage = header.get("stage")?.as_str()?.to_string();
+        // 将 stage 转换为小写以匹配数据库 schema
+        let stage = header.get("stage")?.as_str()?.to_lowercase();
         let content_type = header.get("content_type")?.as_str()?.to_string();
         let created_at = header
             .get("created_at")

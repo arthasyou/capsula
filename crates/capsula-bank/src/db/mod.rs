@@ -1,6 +1,7 @@
 pub mod atomic_permissions;
 pub mod capsule;
 pub mod molecular_permissions;
+pub mod private_key;
 pub mod token;
 pub mod user;
 
@@ -58,12 +59,15 @@ pub async fn create_tables() -> Result<()> {
 
     // Create molecular permissions table (分子权限组合)
     create_molecular_permissions_table().await?;
-    
+
     // Create token table (令牌管理)
     token::create_token_table().await?;
-    
+
     // Create capsule table (数据胶囊存储)
     capsule::create_capsule_table().await?;
+
+    // Create private key table (私钥存储)
+    private_key::create_private_key_table().await?;
 
     Ok(())
 }

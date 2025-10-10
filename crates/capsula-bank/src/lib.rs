@@ -5,3 +5,4 @@ pub mod logging;
 pub mod models;
 pub mod routes;
 pub mod settings;
+pub mod utils;
