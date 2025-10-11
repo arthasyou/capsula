@@ -37,7 +37,7 @@ utoipa-axum = { version = "0.2" }
 # Utilities
 toolcraft-axum-kit = { version = "0.2.3" }
 toolcraft-config = { version = "0.2.0" }
-toolcraft-utils = { version = "0.2.0" }
+toolcraft-utils = { version = "0.2.2" }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 uuid = { version = "1.0", features = ["v4", "serde"] }

@@ -5,4 +5,5 @@ pub mod logging;
 pub mod models;
 pub mod routes;
 pub mod settings;
+pub mod static_files;
 pub mod utils;
