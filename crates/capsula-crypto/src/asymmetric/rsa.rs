@@ -123,6 +123,13 @@ impl Rsa {
     }
 
 
+    /// Encrypt data using own public key with PKCS#1 v1.5 padding
+    /// Use this when you want to encrypt data that only this key can decrypt
+    pub fn encrypt_with_own_key(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        let public_key = self.public_key();
+        encrypt(&public_key, plaintext)
+    }
+
     /// Decrypt data using PKCS#1 v1.5 padding
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let plaintext = self
@@ -196,11 +203,25 @@ mod tests {
     fn test_encrypt_decrypt() {
         let key = Rsa::generate_2048().unwrap();
         let message = b"Secret message";
-        
+
         let public_key = key.public_key();
         let ciphertext = encrypt(&public_key, message).unwrap();
         let plaintext = key.decrypt(&ciphertext).unwrap();
-        
+
+        assert_eq!(message.as_slice(), plaintext.as_slice());
+    }
+
+    #[test]
+    fn test_encrypt_with_own_key() {
+        let key = Rsa::generate_2048().unwrap();
+        let message = b"Secret message encrypted with own key";
+
+        // Encrypt using own public key
+        let ciphertext = key.encrypt_with_own_key(message).unwrap();
+
+        // Decrypt using own private key
+        let plaintext = key.decrypt(&ciphertext).unwrap();
+
         assert_eq!(message.as_slice(), plaintext.as_slice());
     }
 
