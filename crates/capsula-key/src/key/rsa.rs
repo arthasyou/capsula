@@ -148,9 +148,12 @@ impl KeySign for RsaKey {
 
 impl KeyEncDec for RsaKey {
     /// Encrypt data using RSA public key with PKCS1v15 padding
+    ///
+    /// Note: This encrypts using the key's own public key.
+    /// Use this when you want data that only this key can decrypt.
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        let public_key = self.inner.public_key();
-        capsula_crypto::asymmetric::rsa::encrypt(&public_key, plaintext)
+        self.inner
+            .encrypt_with_own_key(plaintext)
             .map_err(|e| Error::CryptoError(e))
     }
 
@@ -379,5 +382,33 @@ mod tests {
         let private_pem = std::fs::read_to_string(&export_info.private_key_path).unwrap();
         let imported_key = RsaKey::from_pkcs8_pem(&private_pem).unwrap();
         assert_eq!(key.key_id(), imported_key.key_id());
+    }
+
+    #[test]
+    fn test_rsa_encrypt_decrypt_with_own_key() {
+        let key = RsaKey::generate_2048().unwrap();
+        let message = b"Secret message encrypted with own key";
+
+        // Encrypt using the KeyEncDec trait (uses own public key)
+        let ciphertext = key.encrypt(message).unwrap();
+
+        // Decrypt using the same key's private key
+        let plaintext = key.decrypt(&ciphertext).unwrap();
+
+        assert_eq!(message.as_slice(), plaintext.as_slice());
+    }
+
+    #[test]
+    fn test_rsa_encrypt_decrypt_round_trip() {
+        let key = RsaKey::generate_2048().unwrap();
+        let original_data = b"Round trip encryption test with own public key";
+
+        // Test encryption with own key
+        let encrypted = key.encrypt(original_data).unwrap();
+        assert_ne!(encrypted, original_data);
+
+        // Test decryption
+        let decrypted = key.decrypt(&encrypted).unwrap();
+        assert_eq!(original_data.as_slice(), decrypted.as_slice());
     }
 }

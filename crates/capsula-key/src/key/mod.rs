@@ -82,11 +82,35 @@ pub trait KeyAgree {
 }
 
 /// 加密解密能力（可选实现，主要用于RSA）
+///
+/// # 重要说明
+///
+/// 对于数据银行场景，`encrypt()` 方法使用密钥自己的公钥进行加密。
+/// 这意味着：
+/// - 调用 `key.encrypt(data)` 会用该密钥的公钥加密数据
+/// - 只有该密钥的私钥部分可以解密数据
+/// - 这适用于自加密场景，如数据银行使用系统密钥加密所有用户数据
+///
+/// # 示例
+///
+/// ```no_run
+/// use capsula_key::{RsaKey, KeyEncDec};
+///
+/// let bank_key = RsaKey::generate_2048().unwrap();
+///
+/// // 使用银行密钥的公钥加密
+/// let encrypted = bank_key.encrypt(b"user data").unwrap();
+///
+/// // 只有银行密钥的私钥可以解密
+/// let decrypted = bank_key.decrypt(&encrypted).unwrap();
+/// ```
 pub trait KeyEncDec {
-    /// 加密数据
+    /// 加密数据（使用自己的公钥）
+    ///
+    /// 注意：此方法使用密钥自己的公钥进行加密，适用于自加密场景。
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>>;
 
-    /// 解密数据  
+    /// 解密数据（使用自己的私钥）
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>>;
 
     /// 获取加密算法标识符
