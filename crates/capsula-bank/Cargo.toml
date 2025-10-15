@@ -10,8 +10,8 @@ default-run = "capsula-bank"
 # Capsula crates
 capsula-key = { path = "../capsula-key" }
 capsula-core = { path = "../capsula-core" }
+capsula-crypto = { path = "../capsula-crypto" }
 # capsula-pki = { path = "../capsula-pki" }
-# capsula-crypto = { path = "../capsula-crypto" }
 
 # Web framework
 tracing = "0.1"

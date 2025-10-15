@@ -1,10 +1,11 @@
 use capsula_core::{Capsule, CapsuleContent};
-use capsula_key::{Key, KeyEncDec};
+use capsula_key::Key;
 
 use crate::{
     db::capsule as db_capsule,
     error::{AppError, Result},
     models::recipe::Recipe,
+    static_files::key,
 };
 
 /// 根据 Recipe 查询并解密胶囊数据
@@ -17,19 +18,21 @@ use crate::{
 /// 返回解密后的胶囊内容列表
 ///
 /// # 流程
-/// 1. 从数据库查询私钥（owner_id = "system"）
+/// 1. 使用系统密钥解密（无需传入密钥参数）
 /// 2. 根据 Recipe 中的 IDs 和 owner_id 查询胶囊
-/// 3. 使用私钥解密每个胶囊
+/// 3. 使用系统私钥解密每个胶囊
 /// 4. 返回解密后的内容
-pub async fn fetch_and_decrypt_capsules<T>(
+///
+/// # 注意
+/// 所有胶囊都使用银行系统密钥加密，因此解密时统一使用 get_system_key()
+pub async fn fetch_and_decrypt_capsules(
     recipe: &Recipe,
     owner_id: &str,
-    decryption_key: &T,
-) -> Result<Vec<DecryptedCapsule>>
-where
-    T: Key + KeyEncDec,
-{
-    // 2. 根据 Recipe 中的 IDs 查询胶囊
+) -> Result<Vec<DecryptedCapsule>> {
+    // 获取系统密钥用于解密
+    let system_key = key::get_system_key();
+
+    // 根据 Recipe 中的 IDs 查询胶囊
     let capsule_records = db_capsule::get_capsules_by_owner_and_ids(owner_id, &recipe.ids).await?;
 
     // 3. 解密每个胶囊
@@ -47,8 +50,8 @@ where
                 AppError::Internal(format!("Failed to deserialize capsule: {}", e))
             })?;
 
-        // 解密胶囊载荷
-        match capsule.unseal_payload(decryption_key) {
+        // 解密胶囊载荷（使用系统密钥）
+        match capsule.unseal_payload(system_key) {
             Ok(content) => {
                 decrypted_capsules.push(DecryptedCapsule {
                     capsule_id: record.capsule_id,
@@ -66,6 +69,81 @@ where
     }
 
     Ok(decrypted_capsules)
+}
+
+/// 创建并封装 Cap1 胶囊（使用系统密钥）
+///
+/// # 参数
+/// - `cap0_id`: 关联的 Cap0 胶囊 ID
+/// - `meta_data`: 元数据明文
+/// - `bnf_extract_data`: BNF 提取数据明文
+/// - `content_type`: 内容类型（如 "medical.blood_test"）
+/// - `policy_uri`: 策略 URI
+/// - `permissions`: 权限列表
+/// - `creator`: 创建者（可选）
+///
+/// # 返回
+/// 完整的 Capsule 实例，已使用系统密钥加密
+///
+/// # 注意
+/// 此函数自动使用银行系统密钥进行加密，无需传入密钥参数
+pub fn create_cap1_capsule(
+    cap0_id: String,
+    meta_data: &[u8],
+    bnf_extract_data: &[u8],
+    content_type: String,
+    policy_uri: String,
+    permissions: Vec<String>,
+    creator: Option<String>,
+) -> Result<capsula_core::Capsule> {
+    use capsula_core::{Cap1, Capsule, ContentType};
+
+    // 获取系统密钥
+    let system_key = key::get_system_key();
+
+    // 获取系统公钥 SPKI DER
+    let public_keys = system_key.public_keys();
+    let signing_key_entry = public_keys
+        .signing_key()
+        .ok_or_else(|| AppError::Internal("System key missing signing capability".to_string()))?;
+    let spki_der = &signing_key_entry.spki_der;
+
+    // 生成胶囊 ID
+    let capsule_id = capsula_crypto::generate_id("cid");
+
+    // 创建 AAD（额外认证数据）
+    let aad = format!("capsule:{}", capsule_id);
+
+    // 创建空的 Keyring（将在 seal 中填充）
+    let mut keyring = capsula_core::Keyring::new();
+
+    // 封装 Cap1
+    let cap1 = Cap1::seal(
+        cap0_id,
+        meta_data,
+        bnf_extract_data,
+        (ContentType::Json, ContentType::Json),
+        aad.as_bytes(),
+        &mut keyring,
+        spki_der,
+        system_key, // 用于签名
+        None,       // 暂不使用 ZKP
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to seal Cap1: {}", e)))?;
+
+    // 创建完整的 Capsule
+    let capsule = Capsule::with_cap1(
+        capsule_id,
+        content_type,
+        policy_uri,
+        permissions,
+        keyring,
+        cap1,
+        creator,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create Capsule: {}", e)))?;
+
+    Ok(capsule)
 }
 
 /// 解密后的胶囊数据

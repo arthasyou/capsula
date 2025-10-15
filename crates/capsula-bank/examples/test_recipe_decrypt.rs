@@ -1,15 +1,14 @@
 //! 测试 Recipe 查询和解密胶囊功能
 //!
 //! 演示如何使用 Recipe 查询数据库中的胶囊并解密
-//! - 从数据库加载 owner 的私钥
+//! - 使用系统密钥自动解密（无需加载 owner 的私钥）
 //! - 使用 Recipe 查询胶囊
 //! - 解密并显示胶囊内容
 
 use capsula_bank::{
-    db::init_db, models::recipe::Recipe, settings::Settings,
+    db::init_db, models::recipe::Recipe, settings::Settings, static_files::key,
     utils::capsula_util::fetch_and_decrypt_capsules,
 };
-use capsula_key::RsaKey;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,12 +19,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Settings::load("config/services.toml")?;
     println!("✓ 配置加载成功");
 
-    // 2. 初始化数据库连接
+    // 2. 初始化系统密钥
+    println!("\n正在初始化系统密钥...");
+    key::init_system_key(&cfg.key.private_key_path)?;
+    println!("✓ 系统密钥初始化成功");
+
+    // 3. 初始化数据库连接
     println!("\n正在连接数据库...");
     init_db(cfg.surrealdb).await?;
     println!("✓ 数据库连接成功");
 
-    // 3. 创建 Recipe 示例
+    // 4. 创建 Recipe 示例
     let recipe = Recipe {
         ids: vec![
             "cid:Cap1-Interpretation-001".to_string(),
@@ -44,10 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("隐私级别: {}", recipe.privacy);
     println!("聚合模式: {}", recipe.aggregate);
 
-    // 4. 使用所有者 ID 查询并解密胶囊
+    // 5. 使用所有者 ID 查询并解密胶囊（使用系统密钥）
     let owner_id = "P001"; // 示例所有者 ID
     println!("\n正在查询并解密胶囊...");
     println!("所有者 ID: {}", owner_id);
+    println!("使用系统密钥进行解密");
 
     // 先查询一下看看数据库中有什么
     use capsula_bank::db::capsule as db_capsule;
@@ -63,30 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // 5. 从数据库加载 owner 的私钥
-    println!("\n正在从数据库加载私钥...");
-    use capsula_bank::db::private_key as db_private_key;
-
-    // 查询 owner 的所有私钥
-    let keys = db_private_key::get_all_keys_by_owner(owner_id).await?;
-
-    if keys.is_empty() {
-        println!("❌ 未找到所有者 {} 的私钥", owner_id);
-        println!("\n提示:");
-        println!("1. 需要先生成并插入 owner 的私钥到数据库");
-        println!("2. 或者可以从文件加载: temp/keys/owner_private.pem");
-        return Ok(());
-    }
-
-    // 使用第一个私钥（实际应用中可能需要根据 key_id 选择）
-    let private_key_record = &keys[0];
-    println!("✓ 找到私钥: {}", private_key_record.key_id);
-
-    let key = RsaKey::from_pkcs8_pem(&private_key_record.private_key_pem)?;
-    println!("✓ 私钥加载成功");
-
-    // 6. 使用私钥解密胶囊
-    match fetch_and_decrypt_capsules(&recipe, owner_id, &key).await {
+    // 6. 使用系统密钥解密胶囊
+    match fetch_and_decrypt_capsules(&recipe, owner_id).await {
         Ok(decrypted_capsules) => {
             println!("\n✓ 成功解密 {} 个胶囊", decrypted_capsules.len());
 
@@ -124,9 +107,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             println!("\n❌ 查询或解密失败: {}", e);
             println!("\n提示:");
-            println!("1. 确保数据库中有对应 owner 的私钥");
-            println!("2. 确保私钥与胶囊加密时使用的公钥匹配");
-            println!("3. 确保数据库中有对应的胶囊数据");
+            println!("1. 确保系统密钥已正确初始化");
+            println!("2. 确保数据库中有对应的胶囊数据");
+            println!("3. 确保胶囊是用系统密钥加密的");
         }
     }
 
