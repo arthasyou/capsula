@@ -1,8 +1,10 @@
 [package]
 name = "capsula-pki-server"
 version = "0.1.0"
-edition = "2021"
-authors = ["ancient <gamesworldcraft@gmail.com>"]
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "PKI Certificate Authority server with REST API"
 
 [dependencies]
