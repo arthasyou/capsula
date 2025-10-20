@@ -1,8 +1,10 @@
 [package]
 name = "capsula-bank"
 version = "0.1.0"
-edition = "2021"
-authors = ["ancient <gamesworldcraft@gmail.com>"]
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Capsula Banking server with REST API"
 default-run = "capsula-bank"
 
@@ -40,6 +42,7 @@ utoipa-axum = { version = "0.2" }
 toolcraft-axum-kit = { version = "0.2.3" }
 toolcraft-config = { version = "0.2.0" }
 toolcraft-utils = { version = "0.2.2" }
+model-gateway-rs = { version = "0.1.6" }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 uuid = { version = "1.0", features = ["v4", "serde"] }

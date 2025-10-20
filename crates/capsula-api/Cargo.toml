@@ -1,8 +1,10 @@
 [package]
 name = "capsula-api"
 version = "0.1.0"
-edition = "2021"
-authors = ["ancient <gamesworldcraft@gmail.com>"]
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Data Capsule REST API server with encapsulation and decapsulation endpoints"
 
 [dependencies]

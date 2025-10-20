@@ -1,9 +1,10 @@
 use capsula_core::{Capsule, CapsuleContent};
-use capsula_key::Key;
+use capsula_key::{Key, RsaKey};
 
 use crate::{
     db::capsule as db_capsule,
     error::{AppError, Result},
+    models::capsule::CapsuleRecord,
     models::recipe::Recipe,
     static_files::key,
 };
@@ -35,7 +36,14 @@ pub async fn fetch_and_decrypt_capsules(
     // 根据 Recipe 中的 IDs 查询胶囊
     let capsule_records = db_capsule::get_capsules_by_owner_and_ids(owner_id, &recipe.ids).await?;
 
-    // 3. 解密每个胶囊
+    decrypt_capsule_records(capsule_records, system_key)
+}
+
+fn decrypt_capsule_records(
+    capsule_records: Vec<CapsuleRecord>,
+    system_key: &RsaKey,
+) -> Result<Vec<DecryptedCapsule>> {
+    // 解密每个胶囊
     let mut decrypted_capsules = Vec::new();
 
     for record in capsule_records {
