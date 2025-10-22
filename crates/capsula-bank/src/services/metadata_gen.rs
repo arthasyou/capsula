@@ -2,9 +2,9 @@
 //!
 //! 从文件中生成结构化元数据
 
+use std::{io, path::Path};
+
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-use std::io;
 use tokio::fs;
 
 /// 文件元数据
@@ -138,7 +138,7 @@ impl MetadataGenerator {
     /// # 返回
     /// 十六进制编码的哈希字符串
     async fn compute_hash(&self, file_path: &Path) -> io::Result<String> {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
 
         let content = fs::read(file_path).await?;
         let mut hasher = Sha256::new();
@@ -179,9 +179,11 @@ impl Default for MetadataGenerator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Write;
+
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_generate_metadata() {

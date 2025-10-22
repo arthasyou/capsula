@@ -47,35 +47,36 @@ impl AtomicPermission {
 }
 
 /// 获取默认的原子权限列表
-/// 权限向量顺序：[阅读, 注释, 编辑胶囊, 修改原始数据, 明文用, 黑盒用, 统计用, 导出, 授权, 转授, 撤销, 拥有, 转让, 追溯]
+/// 权限向量顺序：[阅读, 注释, 编辑胶囊, 修改原始数据, 明文用, 黑盒用, 统计用, 导出, 授权, 转授,
+/// 撤销, 拥有, 转让, 追溯]
 pub fn get_default_atomic_permissions() -> Vec<AtomicPermission> {
     vec![
         // 1. 阅读编辑类
         AtomicPermission::new(
             "read",
             "阅读",
-            0,  // 位置0
+            0, // 位置0
             PermissionCategory::ReadEdit,
             "查看数据胶囊内容，包括元数据和浓缩概览的查看，原始数据的查看不属于数据胶囊范畴",
         ),
         AtomicPermission::new(
             "annotate",
             "注释",
-            1,  // 位置1
+            1, // 位置1
             PermissionCategory::ReadEdit,
             "添加注释说明，但不修改元数据",
         ),
         AtomicPermission::new(
             "edit_capsule",
             "编辑胶囊",
-            2,  // 位置2
+            2, // 位置2
             PermissionCategory::ReadEdit,
             "数据银行的权利，用于封装数据胶囊时，生成和编辑其元数据和浓缩概览",
         ),
         AtomicPermission::new(
             "modify_raw",
             "修改原始数据",
-            3,  // 位置3
+            3, // 位置3
             PermissionCategory::ReadEdit,
             "采集者创建原始数据，和发送给数据银行前的修改，其他实体无此权利",
         ),
@@ -83,21 +84,21 @@ pub fn get_default_atomic_permissions() -> Vec<AtomicPermission> {
         AtomicPermission::new(
             "plaintext_use",
             "明文用",
-            4,  // 位置4
+            4, // 位置4
             PermissionCategory::Usage,
             "明文直接使用",
         ),
         AtomicPermission::new(
             "blackbox_use",
             "黑盒用",
-            5,  // 位置5
+            5, // 位置5
             PermissionCategory::Usage,
             "可用不可见，可将数据、数据回答直接传输到APP",
         ),
         AtomicPermission::new(
             "statistical_use",
             "统计用",
-            6,  // 位置6
+            6, // 位置6
             PermissionCategory::Usage,
             "用于统计处理，只传输和展现统计结果",
         ),
@@ -105,21 +106,21 @@ pub fn get_default_atomic_permissions() -> Vec<AtomicPermission> {
         AtomicPermission::new(
             "export",
             "导出",
-            7,  // 位置7
+            7, // 位置7
             PermissionCategory::Transfer,
             "数据下载导出",
         ),
         AtomicPermission::new(
             "authorize",
             "授权",
-            8,  // 位置8
+            8, // 位置8
             PermissionCategory::Transfer,
             "拥有将该数据胶囊进行授权的能力",
         ),
         AtomicPermission::new(
             "delegate",
             "转授",
-            9,  // 位置9
+            9, // 位置9
             PermissionCategory::Transfer,
             "数据拥有者将授权能力，委托给数据银行，进行转授权",
         ),

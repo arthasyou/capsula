@@ -1,16 +1,16 @@
+use capsula_key::key::{Key, KeySign};
 use serde::{Deserialize, Serialize};
 
 use crate::integrity::{digest::Digest, signature::Signature};
-use capsula_key::key::{Key, KeySign};
 
 /// 2阶数据胶囊：聚合层
-/// 
+///
 /// 2阶数据胶囊是按所有者聚合的胶囊容器，提供：
 /// 1. owner_id: 所有者唯一标识
 /// 2. refs: 按类型分组的1阶胶囊ID引用列表
 /// 3. bundle_hash: 引用集合的完整性哈希
 /// 4. bundle_signature: 对bundle_hash的签名
-/// 
+///
 /// 设计原则：
 /// - 按所有者聚合，便于权限管理和检索
 /// - 只存储引用，不存储实际数据，保持轻量级
@@ -38,7 +38,7 @@ pub struct Cap2 {
 }
 
 /// 引用条目：特定类型的胶囊ID集合
-/// 
+///
 /// 按报告类型或数据类型对1阶胶囊进行分组
 /// 便于类型化检索和管理
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ pub struct RefEntry {
 }
 
 /// 引用条目的元数据
-/// 
+///
 /// 提供关于特定类型胶囊集合的统计和描述信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefMetadata {
@@ -80,7 +80,7 @@ pub struct RefMetadata {
 
 impl Cap2 {
     /// 计算引用集合的哈希值
-    /// 
+    ///
     /// 对refs进行规范化序列化后计算SHA-256哈希
     /// 确保相同的引用集合产生相同的哈希值
     pub fn compute_bundle_hash(&self) -> crate::Result<Digest> {
@@ -89,7 +89,7 @@ impl Cap2 {
         // 规范化序列化：按report_type排序，ids内部也排序
         let mut normalized_refs = self.refs.clone();
         normalized_refs.sort_by(|a, b| a.report_type.cmp(&b.report_type));
-        
+
         for ref_entry in &mut normalized_refs {
             ref_entry.ids.sort();
         }
@@ -97,7 +97,7 @@ impl Cap2 {
         // 序列化并计算哈希
         let serialized = serde_json::to_string(&normalized_refs)
             .map_err(|e| crate::error::CoreError::JsonError(e))?;
-        
+
         let mut hasher = Sha256::new();
         hasher.update(serialized.as_bytes());
         let hash_bytes = hasher.finalize();
@@ -110,7 +110,7 @@ impl Cap2 {
     }
 
     /// 验证bundle_hash的正确性
-    /// 
+    ///
     /// 重新计算引用集合的哈希值并与存储的hash比较
     pub fn verify_bundle_hash(&self) -> crate::Result<bool> {
         let computed_hash = self.compute_bundle_hash()?;
@@ -119,7 +119,9 @@ impl Cap2 {
 
     /// 根据报告类型查找引用条目
     pub fn find_refs_by_type(&self, report_type: &str) -> Option<&RefEntry> {
-        self.refs.iter().find(|ref_entry| ref_entry.report_type == report_type)
+        self.refs
+            .iter()
+            .find(|ref_entry| ref_entry.report_type == report_type)
     }
 
     /// 获取所有1阶胶囊ID的扁平化列表
@@ -141,33 +143,38 @@ impl Cap2 {
 
     /// 统计总的胶囊数量
     pub fn count_total_capsules(&self) -> usize {
-        self.refs
-            .iter()
-            .map(|ref_entry| ref_entry.ids.len())
-            .sum()
+        self.refs.iter().map(|ref_entry| ref_entry.ids.len()).sum()
     }
 
     /// 添加新的引用条目
-    /// 
+    ///
     /// 如果该类型已存在，则合并ID列表；否则创建新条目
     pub fn add_ref_entry(&mut self, mut new_entry: RefEntry) -> crate::Result<()> {
-        if let Some(existing) = self.refs.iter_mut().find(|ref_entry| ref_entry.report_type == new_entry.report_type) {
+        if let Some(existing) = self
+            .refs
+            .iter_mut()
+            .find(|ref_entry| ref_entry.report_type == new_entry.report_type)
+        {
             // 合并ID列表，去重
             existing.ids.append(&mut new_entry.ids);
             existing.ids.sort();
             existing.ids.dedup();
-            
+
             // 更新元数据
             if let Some(new_meta) = new_entry.metadata {
                 if let Some(existing_meta) = &mut existing.metadata {
                     existing_meta.count = existing.ids.len() as u32;
                     // 更新时间范围
-                    if let (Some(new_earliest), Some(existing_earliest)) = (&new_meta.earliest_date, &existing_meta.earliest_date) {
+                    if let (Some(new_earliest), Some(existing_earliest)) =
+                        (&new_meta.earliest_date, &existing_meta.earliest_date)
+                    {
                         if new_earliest < existing_earliest {
                             existing_meta.earliest_date = new_meta.earliest_date;
                         }
                     }
-                    if let (Some(new_latest), Some(existing_latest)) = (&new_meta.latest_date, &existing_meta.latest_date) {
+                    if let (Some(new_latest), Some(existing_latest)) =
+                        (&new_meta.latest_date, &existing_meta.latest_date)
+                    {
                         if new_latest > existing_latest {
                             existing_meta.latest_date = new_meta.latest_date;
                         }
@@ -184,15 +191,16 @@ impl Cap2 {
 
         // 重新计算hash（需要重新签名）
         self.bundle_hash = self.compute_bundle_hash()?;
-        
+
         Ok(())
     }
 
     /// 移除指定类型的引用条目
     pub fn remove_ref_entry(&mut self, report_type: &str) -> crate::Result<bool> {
         let original_len = self.refs.len();
-        self.refs.retain(|ref_entry| ref_entry.report_type != report_type);
-        
+        self.refs
+            .retain(|ref_entry| ref_entry.report_type != report_type);
+
         if self.refs.len() < original_len {
             // 重新计算hash（需要重新签名）
             self.bundle_hash = self.compute_bundle_hash()?;
@@ -214,11 +222,7 @@ impl Cap2 {
     ///
     /// # 返回
     /// 新的Cap2实例，包含计算好的hash和签名
-    pub fn seal<S>(
-        owner_id: String,
-        refs: Vec<RefEntry>,
-        signing_key: &S,
-    ) -> crate::Result<Self>
+    pub fn seal<S>(owner_id: String, refs: Vec<RefEntry>, signing_key: &S) -> crate::Result<Self>
     where
         S: Key + KeySign,
     {
@@ -243,9 +247,10 @@ impl Cap2 {
 
         // 2. 对hash进行签名
         let hash_bytes = bundle_hash.hash.as_bytes();
-        let signature_bytes = signing_key.sign(hash_bytes)
+        let signature_bytes = signing_key
+            .sign(hash_bytes)
             .map_err(|e| crate::error::CoreError::DataError(format!("Signing failed: {}", e)))?;
-        
+
         let bundle_signature = Signature {
             alg: "Ed25519".to_string(),
             sig: capsula_crypto::base64::encode(&signature_bytes),
@@ -261,7 +266,6 @@ impl Cap2 {
             bundle_signature,
         })
     }
-
 }
 
 impl RefEntry {
@@ -279,7 +283,7 @@ impl RefEntry {
         if !self.ids.contains(&id) {
             self.ids.push(id);
             self.ids.sort();
-            
+
             // 更新元数据计数
             if let Some(meta) = &mut self.metadata {
                 meta.count = self.ids.len() as u32;
@@ -291,7 +295,7 @@ impl RefEntry {
     pub fn remove_id(&mut self, id: &str) -> bool {
         let original_len = self.ids.len();
         self.ids.retain(|existing_id| existing_id != id);
-        
+
         if self.ids.len() < original_len {
             // 更新元数据计数
             if let Some(meta) = &mut self.metadata {
@@ -344,7 +348,6 @@ impl RefMetadata {
         self.tags.retain(|t| t != tag);
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -471,11 +474,7 @@ mod tests {
                 vec!["id2".to_string(), "id1".to_string()], // 无序
                 None,
             ),
-            RefEntry::new(
-                "A类型".to_string(),
-                vec!["id3".to_string()],
-                None,
-            ),
+            RefEntry::new("A类型".to_string(), vec!["id3".to_string()], None),
         ];
 
         let cap2 = Cap2::new_for_test(
@@ -492,11 +491,7 @@ mod tests {
 
         // 验证相同数据产生相同哈希
         let refs2 = vec![
-            RefEntry::new(
-                "A类型".to_string(),
-                vec!["id3".to_string()],
-                None,
-            ),
+            RefEntry::new("A类型".to_string(), vec!["id3".to_string()], None),
             RefEntry::new(
                 "B类型".to_string(),
                 vec!["id1".to_string(), "id2".to_string()], // 不同顺序
@@ -521,13 +516,11 @@ mod tests {
     fn test_add_ref_entry() -> crate::Result<()> {
         let mut cap2 = Cap2::new_for_test(
             "owner1".to_string(),
-            vec![
-                RefEntry::new(
-                    "类型A".to_string(),
-                    vec!["id1".to_string()],
-                    None,
-                ),
-            ],
+            vec![RefEntry::new(
+                "类型A".to_string(),
+                vec!["id1".to_string()],
+                None,
+            )],
             create_test_digest(),
             create_test_signature(),
         );
@@ -569,13 +562,11 @@ mod tests {
             Some("测试报告".to_string()),
         );
 
-        let refs = vec![
-            RefEntry::new(
-                "类型A".to_string(),
-                vec!["id1".to_string(), "id2".to_string()],
-                Some(metadata),
-            ),
-        ];
+        let refs = vec![RefEntry::new(
+            "类型A".to_string(),
+            vec!["id1".to_string(), "id2".to_string()],
+            Some(metadata),
+        )];
 
         let cap2 = Cap2::new_for_test(
             "owner1".to_string(),
@@ -593,13 +584,11 @@ mod tests {
 
     #[test]
     fn test_cap2_serialization() {
-        let refs = vec![
-            RefEntry::new(
-                "测试类型".to_string(),
-                vec!["id1".to_string()],
-                None,
-            ),
-        ];
+        let refs = vec![RefEntry::new(
+            "测试类型".to_string(),
+            vec!["id1".to_string()],
+            None,
+        )];
 
         let cap2 = Cap2::new_for_test(
             "owner1".to_string(),

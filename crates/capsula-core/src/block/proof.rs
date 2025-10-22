@@ -11,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorProof {
-    pub subject: Digest,             // 明文指纹（或 Merkle 根）
+    pub subject: Digest, // 明文指纹（或 Merkle 根）
     #[serde(default)]
     pub schema_hash: Option<String>, // 可选：明文结构/规范哈希
     #[serde(default)]
@@ -35,11 +35,7 @@ impl AuthorProof {
     ///
     /// # Returns
     /// A new AuthorProof with signature
-    pub fn create<K>(
-        plaintext: &[u8],
-        signing_key: &K,
-        schema_hash: Option<String>,
-    ) -> Result<Self>
+    pub fn create<K>(plaintext: &[u8], signing_key: &K, schema_hash: Option<String>) -> Result<Self>
     where
         K: Key + KeySign,
     {
@@ -104,11 +100,8 @@ impl AuthorProof {
         }
 
         // 3. Prepare signing data
-        let signing_data = Self::prepare_signing_data(
-            &self.subject,
-            &self.schema_hash,
-            &self.issued_at,
-        )?;
+        let signing_data =
+            Self::prepare_signing_data(&self.subject, &self.schema_hash, &self.issued_at)?;
 
         // 4. Decode signature
         let signature_bytes = base64::decode(&self.signature.sig)
@@ -151,8 +144,7 @@ impl AuthorProof {
             "issued_at": issued_at
         });
 
-        let json = serde_json::to_string(&signing_obj)
-            .map_err(|e| Error::JsonError(e))?;
+        let json = serde_json::to_string(&signing_obj).map_err(|e| Error::JsonError(e))?;
         Ok(json.into_bytes())
     }
 

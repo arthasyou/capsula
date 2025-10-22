@@ -18,8 +18,8 @@ use x509_cert::{
 };
 
 use crate::{
-    ra::csr::{Csr, CsrSubject},
     error::PkiError,
+    ra::csr::{Csr, CsrSubject},
     Result,
 };
 
@@ -162,7 +162,6 @@ fn create_self_signed_certificate_internal<K: Key + KeySign>(
     )
 }
 
-
 impl X509Certificate {
     /// Parse certificate from PEM format
     pub fn from_pem(pem: &str) -> Result<Self> {
@@ -213,7 +212,7 @@ impl X509Certificate {
     /// Extract public key bytes based on the algorithm
     pub fn public_key_bytes(&self) -> Result<Vec<u8>> {
         let spki = &self.inner.tbs_certificate.subject_public_key_info;
-        
+
         // Return the public key bytes based on the algorithm
         match spki.algorithm.oid {
             const_oid::db::rfc8410::ID_ED_25519 => {
@@ -275,10 +274,10 @@ impl X509Certificate {
         // For now, assume it's Ed25519 and construct SPKI DER
         let mut spki_der = Vec::new();
         spki_der.extend_from_slice(&[
-            0x30, 0x2a,                    // SEQUENCE, length 42
-            0x30, 0x05,                    // SEQUENCE, length 5 (AlgorithmIdentifier)
-            0x06, 0x03, 0x2b, 0x65, 0x70,  // OID 1.3.101.112 (Ed25519)
-            0x03, 0x21, 0x00,              // BIT STRING, length 33, unused bits 0
+            0x30, 0x2a, // SEQUENCE, length 42
+            0x30, 0x05, // SEQUENCE, length 5 (AlgorithmIdentifier)
+            0x06, 0x03, 0x2b, 0x65, 0x70, // OID 1.3.101.112 (Ed25519)
+            0x03, 0x21, 0x00, // BIT STRING, length 33, unused bits 0
         ]);
         spki_der.extend_from_slice(issuer_public_key);
 
@@ -358,7 +357,7 @@ impl X509Certificate {
 }
 
 /// Internal function to create certificate with common logic
-/// 
+///
 /// # Arguments
 /// * `subject_name` - Subject DN from CSR
 /// * `issuer_name` - Issuer DN (from CA cert or same as subject for self-signed)
@@ -393,8 +392,7 @@ fn create_certificate_internal<K: Key + KeySign>(
         .map_err(|e| PkiError::CertError(format!("Failed to create not_before time: {}", e)))?;
 
     let not_after_time = now
-        + Duration::from_secs(cert_info.validity_seconds)
-            .min(Duration::from_secs(u32::MAX as u64));
+        + Duration::from_secs(cert_info.validity_seconds).min(Duration::from_secs(u32::MAX as u64));
     let not_after = Time::try_from(not_after_time)
         .map_err(|e| PkiError::CertError(format!("Failed to create not_after time: {}", e)))?;
 
@@ -515,13 +513,14 @@ fn create_certificate_internal<K: Key + KeySign>(
         .map_err(|e| PkiError::CertError(format!("Failed to encode TbsCertificate: {}", e)))?;
 
     // Sign the certificate
-    let signature = signing_key.sign(&tbs_der)
+    let signature = signing_key
+        .sign(&tbs_der)
         .map_err(|_| PkiError::CertError("Failed to sign certificate".to_string()))?;
-    
+
     // Convert to array (Ed25519 signatures are 64 bytes)
     if signature.len() != 64 {
         return Err(PkiError::CertError(format!(
-            "Expected 64-byte signature, got {} bytes", 
+            "Expected 64-byte signature, got {} bytes",
             signature.len()
         )));
     }
@@ -544,9 +543,7 @@ fn create_certificate_internal<K: Key + KeySign>(
         signature: signature_bits,
     };
 
-    Ok(X509Certificate {
-        inner: certificate,
-    })
+    Ok(X509Certificate { inner: certificate })
 }
 
 // Helper function to extract Subject Key Identifier from a certificate

@@ -2,14 +2,16 @@
 //!
 //! 将验证、身份认证和确认决策整合在一起的核心处理器
 
-use crate::error::{PkiError, Result};
-use crate::ra::{
-    Confirmer, ConfirmationResult, Context, Csr, Evaluator, ValidationOutcome, Validator,
-    X509Certificate,
+use crate::{
+    error::{PkiError, Result},
+    ra::{
+        ConfirmationResult, Confirmer, Context, Csr, Evaluator, ValidationOutcome, Validator,
+        X509Certificate,
+    },
 };
 
 /// RA证书申请处理器
-/// 
+///
 /// 整合验证、身份认证和确认决策的完整流程
 pub struct Processor {
     /// CSR验证器
@@ -73,7 +75,7 @@ impl Processor {
     pub fn process_request(&self, csr: &Csr, context: &Context) -> Result<ProcessingResult> {
         // 第一步：验证CSR
         let validation = self.validator.validate_csr(csr)?;
-        
+
         // 如果CSR验证失败，直接返回
         if !validation.is_valid {
             return Ok(ProcessingResult {
@@ -90,28 +92,22 @@ impl Processor {
 
         // 第二步：身份认证评估
         let auth_result = self.identity_evaluator.evaluate_trust(context, &[])?;
-        
+
         // 第三步：确认决策
         let confirmation = self.confirmer.confirm(&auth_result);
-        
+
         // 第四步：综合决策
         let can_issue_certificate = validation.is_valid && confirmation.is_approved();
-        
+
         let summary = if can_issue_certificate {
-            format!(
-                "处理成功: 信任级别 {}, 验证通过",
-                confirmation.trust_level
-            )
+            format!("处理成功: 信任级别 {}, 验证通过", confirmation.trust_level)
         } else if confirmation.requires_review() {
             format!(
                 "需要人工审核: 信任级别 {}, {}",
                 confirmation.trust_level, confirmation.reason
             )
         } else {
-            format!(
-                "处理拒绝: {}",
-                confirmation.reason
-            )
+            format!("处理拒绝: {}", confirmation.reason)
         };
 
         Ok(ProcessingResult {
@@ -132,7 +128,7 @@ impl Processor {
     ) -> Result<X509Certificate> {
         // 处理申请
         let result = self.process_request(csr, context)?;
-        
+
         // 检查是否可以签发
         if !result.can_issue_certificate {
             return Err(PkiError::ValidationError(format!(
@@ -143,15 +139,12 @@ impl Processor {
 
         // TODO: 签发证书需要更多参数，这里先返回错误
         Err(PkiError::SigningError(
-            "签发证书功能传入参数不完整，需要CertificateInfo".to_string()
+            "签发证书功能传入参数不完整，需要CertificateInfo".to_string(),
         ))
     }
 
     /// 批量处理申请
-    pub fn batch_process(
-        &self,
-        requests: &[(Csr, Context)],
-    ) -> Vec<Result<ProcessingResult>> {
+    pub fn batch_process(&self, requests: &[(Csr, Context)]) -> Vec<Result<ProcessingResult>> {
         requests
             .iter()
             .map(|(csr, context)| self.process_request(csr, context))
@@ -170,7 +163,11 @@ impl Processor {
             approved,
             rejected,
             pending,
-            approval_rate: if total > 0 { approved as f64 / total as f64 } else { 0.0 },
+            approval_rate: if total > 0 {
+                approved as f64 / total as f64
+            } else {
+                0.0
+            },
         }
     }
 }
@@ -225,11 +222,7 @@ mod tests {
                     score: 90,
                     trust_level: 80,
                 },
-                confirmation: ConfirmationResult::new(
-                    Decision::Approved,
-                    80,
-                    "通过".to_string(),
-                ),
+                confirmation: ConfirmationResult::new(Decision::Approved, 80, "通过".to_string()),
                 can_issue_certificate: true,
                 summary: "成功".to_string(),
             },
@@ -240,11 +233,7 @@ mod tests {
                     score: 30,
                     trust_level: 20,
                 },
-                confirmation: ConfirmationResult::new(
-                    Decision::Rejected,
-                    20,
-                    "拒绝".to_string(),
-                ),
+                confirmation: ConfirmationResult::new(Decision::Rejected, 20, "拒绝".to_string()),
                 can_issue_certificate: false,
                 summary: "失败".to_string(),
             },
@@ -252,7 +241,7 @@ mod tests {
 
         let processor = Processor::default();
         let stats = processor.get_statistics(&results);
-        
+
         assert_eq!(stats.total, 2);
         assert_eq!(stats.approved, 1);
         assert_eq!(stats.rejected, 1);

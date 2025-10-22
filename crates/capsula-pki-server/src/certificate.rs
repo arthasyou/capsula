@@ -1,4 +1,5 @@
 use std::{fs, path::Path, process::Command};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -89,12 +90,9 @@ impl CertificateSigner {
         let (key_path, cert_path) = self.generate_key_and_csr(request, &serial_number).await?;
 
         // Sign the certificate with intermediate CA
-        let signed_cert_path = self.sign_with_intermediate_ca(
-            &cert_path,
-            &serial_number,
-            request,
-            validity_days,
-        ).await?;
+        let signed_cert_path = self
+            .sign_with_intermediate_ca(&cert_path, &serial_number, request, validity_days)
+            .await?;
 
         // Read the signed certificate (end entity only)
         let certificate_pem = fs::read_to_string(&signed_cert_path)?;
@@ -103,31 +101,47 @@ impl CertificateSigner {
         let private_key_pem = fs::read_to_string(&key_path)?;
 
         // Extract certificate information (store only end entity certificate)
-        let certificate_info = self.extract_certificate_info(&certificate_pem, &private_key_pem, request, validity_days)?;
+        let certificate_info = self.extract_certificate_info(
+            &certificate_pem,
+            &private_key_pem,
+            request,
+            validity_days,
+        )?;
 
         // Clean up temporary files
         self.cleanup_temp_files(&[key_path, cert_path, signed_cert_path])?;
 
-        info!("Certificate signed successfully with serial: {}", serial_number);
+        info!(
+            "Certificate signed successfully with serial: {}",
+            serial_number
+        );
 
         Ok(certificate_info)
     }
 
     /// Validate that intermediate CA is available and ready
     fn validate_intermediate_ca(&self) -> Result<()> {
-        let intermediate_key_path = format!("{}/private/intermediate.key.pem", self.config.intermediate_ca_path);
-        let intermediate_cert_path = format!("{}/certs/intermediate.cert.pem", self.config.intermediate_ca_path);
+        let intermediate_key_path = format!(
+            "{}/private/intermediate.key.pem",
+            self.config.intermediate_ca_path
+        );
+        let intermediate_cert_path = format!(
+            "{}/certs/intermediate.cert.pem",
+            self.config.intermediate_ca_path
+        );
 
         if !Path::new(&intermediate_key_path).exists() {
-            return Err(AppError::PkiError(
-                format!("Intermediate CA private key not found: {}", intermediate_key_path)
-            ));
+            return Err(AppError::PkiError(format!(
+                "Intermediate CA private key not found: {}",
+                intermediate_key_path
+            )));
         }
 
         if !Path::new(&intermediate_cert_path).exists() {
-            return Err(AppError::PkiError(
-                format!("Intermediate CA certificate not found: {}", intermediate_cert_path)
-            ));
+            return Err(AppError::PkiError(format!(
+                "Intermediate CA certificate not found: {}",
+                intermediate_cert_path
+            )));
         }
 
         Ok(())
@@ -136,12 +150,12 @@ impl CertificateSigner {
     /// Generate a unique serial number for the certificate
     fn generate_serial_number(&self) -> Result<String> {
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| AppError::Internal(format!("Time error: {}", e)))?
             .as_secs();
-        
+
         let random_part: u32 = rand::random();
         Ok(format!("{:x}{:08x}", timestamp, random_part))
     }
@@ -174,9 +188,10 @@ impl CertificateSigner {
             .map_err(|e| AppError::Internal(format!("Failed to generate private key: {}", e)))?;
 
         if !key_output.status.success() {
-            return Err(AppError::Internal(
-                format!("OpenSSL key generation failed: {}", String::from_utf8_lossy(&key_output.stderr))
-            ));
+            return Err(AppError::Internal(format!(
+                "OpenSSL key generation failed: {}",
+                String::from_utf8_lossy(&key_output.stderr)
+            )));
         }
 
         // Generate CSR
@@ -185,16 +200,16 @@ impl CertificateSigner {
 
         let csr_output = Command::new("openssl")
             .args(&[
-                "req", "-new", "-key", &key_path, "-out", &csr_path,
-                "-subj", &subject
+                "req", "-new", "-key", &key_path, "-out", &csr_path, "-subj", &subject,
             ])
             .output()
             .map_err(|e| AppError::Internal(format!("Failed to generate CSR: {}", e)))?;
 
         if !csr_output.status.success() {
-            return Err(AppError::Internal(
-                format!("OpenSSL CSR generation failed: {}", String::from_utf8_lossy(&csr_output.stderr))
-            ));
+            return Err(AppError::Internal(format!(
+                "OpenSSL CSR generation failed: {}",
+                String::from_utf8_lossy(&csr_output.stderr)
+            )));
         }
 
         Ok((key_path, csr_path))
@@ -211,34 +226,53 @@ impl CertificateSigner {
         let temp_dir = format!("{}/temp", self.config.data_dir);
         let cert_path = format!("{}/cert_{}.cert.pem", temp_dir, serial_number);
 
-        let intermediate_key_path = format!("{}/private/intermediate.key.pem", self.config.intermediate_ca_path);
-        let intermediate_cert_path = format!("{}/certs/intermediate.cert.pem", self.config.intermediate_ca_path);
+        let intermediate_key_path = format!(
+            "{}/private/intermediate.key.pem",
+            self.config.intermediate_ca_path
+        );
+        let intermediate_cert_path = format!(
+            "{}/certs/intermediate.cert.pem",
+            self.config.intermediate_ca_path
+        );
         let openssl_config_path = format!("{}/openssl.cnf", self.config.intermediate_ca_path);
 
         let cert_validity_days = validity_days.unwrap_or(self.config.default_validity_days); // Use custom or default validity
         let extensions = "usr_cert"; // Use default user certificate extensions
 
-        info!("Signing certificate with intermediate CA, validity: {} days", cert_validity_days);
+        info!(
+            "Signing certificate with intermediate CA, validity: {} days",
+            cert_validity_days
+        );
 
         let sign_output = Command::new("openssl")
             .args(&[
-                "x509", "-req", "-in", csr_path,
-                "-CA", &intermediate_cert_path,
-                "-CAkey", &intermediate_key_path,
+                "x509",
+                "-req",
+                "-in",
+                csr_path,
+                "-CA",
+                &intermediate_cert_path,
+                "-CAkey",
+                &intermediate_key_path,
                 "-CAcreateserial",
-                "-out", &cert_path,
-                "-days", &cert_validity_days.to_string(),
+                "-out",
+                &cert_path,
+                "-days",
+                &cert_validity_days.to_string(),
                 "-sha256",
-                "-extensions", &extensions,
-                "-extfile", &openssl_config_path
+                "-extensions",
+                &extensions,
+                "-extfile",
+                &openssl_config_path,
             ])
             .output()
             .map_err(|e| AppError::Internal(format!("Failed to sign certificate: {}", e)))?;
 
         if !sign_output.status.success() {
-            return Err(AppError::Internal(
-                format!("OpenSSL certificate signing failed: {}", String::from_utf8_lossy(&sign_output.stderr))
-            ));
+            return Err(AppError::Internal(format!(
+                "OpenSSL certificate signing failed: {}",
+                String::from_utf8_lossy(&sign_output.stderr)
+            )));
         }
 
         Ok(cert_path)
@@ -249,8 +283,9 @@ impl CertificateSigner {
         match usage_type {
             CertificateUsageType::Server => "server_cert".to_string(),
             CertificateUsageType::Client => "usr_cert".to_string(),
-            CertificateUsageType::CodeSigning => "usr_cert".to_string(), // TODO: Add code signing extensions
-            CertificateUsageType::Email => "usr_cert".to_string(), // TODO: Add email extensions
+            CertificateUsageType::CodeSigning => "usr_cert".to_string(), /* TODO: Add code signing extensions */
+            CertificateUsageType::Email => "usr_cert".to_string(),       /* TODO: Add email
+                                                                           * extensions */
         }
     }
 
@@ -272,9 +307,15 @@ impl CertificateSigner {
 
         // Determine key algorithm from request
         let (key_algorithm, key_size) = match &request.algorithm {
-            crate::models::certificate::CertificateAlgorithm::Ed25519 => ("Ed25519".to_string(), None),
-            crate::models::certificate::CertificateAlgorithm::RSA { key_size } => (format!("RSA-{}", key_size), Some(*key_size)),
-            crate::models::certificate::CertificateAlgorithm::ECDSA { curve } => (format!("ECDSA-{}", curve), None),
+            crate::models::certificate::CertificateAlgorithm::Ed25519 => {
+                ("Ed25519".to_string(), None)
+            }
+            crate::models::certificate::CertificateAlgorithm::RSA { key_size } => {
+                (format!("RSA-{}", key_size), Some(*key_size))
+            }
+            crate::models::certificate::CertificateAlgorithm::ECDSA { curve } => {
+                (format!("ECDSA-{}", curve), None)
+            }
         };
 
         Ok(IssuedCertificate {
@@ -282,7 +323,8 @@ impl CertificateSigner {
             certificate_pem: certificate_pem.to_string(),
             private_key_pem: private_key_pem.to_string(),
             subject,
-            issuer: "CN=Capsula Intermediate CA, O=Capsula Test PKI, OU=Intermediate CA".to_string(),
+            issuer: "CN=Capsula Intermediate CA, O=Capsula Test PKI, OU=Intermediate CA"
+                .to_string(),
             not_before: now,
             not_after,
             key_algorithm,
@@ -299,44 +341,54 @@ impl CertificateSigner {
         validity_days: Option<u32>,
     ) -> Result<IssuedCertificate> {
         info!("Starting certificate renewal for user: {}", username);
-        
+
         // Create a certificate request for renewal (same as new certificate)
         let request = CertificateRequest {
             username: username.to_string(),
             algorithm: crate::models::certificate::CertificateAlgorithm::Ed25519,
         };
-        
+
         // Sign the new certificate with custom validity or default
         self.sign_certificate(&request, validity_days).await
     }
 
     /// Build certificate chain by combining end entity cert with intermediate CA cert
     fn build_certificate_chain(&self, end_entity_cert_pem: &str) -> Result<String> {
-        let intermediate_cert_path = format!("{}/certs/intermediate.cert.pem", self.config.intermediate_ca_path);
-        
+        let intermediate_cert_path = format!(
+            "{}/certs/intermediate.cert.pem",
+            self.config.intermediate_ca_path
+        );
+
         if !Path::new(&intermediate_cert_path).exists() {
-            warn!("Intermediate CA certificate not found at {}, returning single certificate", intermediate_cert_path);
+            warn!(
+                "Intermediate CA certificate not found at {}, returning single certificate",
+                intermediate_cert_path
+            );
             return Ok(end_entity_cert_pem.to_string());
         }
-        
+
         // Read intermediate CA certificate
-        let intermediate_cert_pem = fs::read_to_string(&intermediate_cert_path)
-            .map_err(|e| AppError::PkiError(format!("Failed to read intermediate CA certificate: {}", e)))?;
-        
+        let intermediate_cert_pem = fs::read_to_string(&intermediate_cert_path).map_err(|e| {
+            AppError::PkiError(format!("Failed to read intermediate CA certificate: {}", e))
+        })?;
+
         // Build certificate chain: end entity certificate first, then intermediate CA certificate
         // This follows the standard chain order for TLS and PKI applications
         let mut chain = String::new();
         chain.push_str(end_entity_cert_pem);
-        
+
         // Ensure there's a newline between certificates
         if !end_entity_cert_pem.ends_with('\n') {
             chain.push('\n');
         }
-        
+
         chain.push_str(&intermediate_cert_pem);
-        
-        info!("Built certificate chain with {} certificates (end entity + intermediate CA)", 2);
-        
+
+        info!(
+            "Built certificate chain with {} certificates (end entity + intermediate CA)",
+            2
+        );
+
         Ok(chain)
     }
 

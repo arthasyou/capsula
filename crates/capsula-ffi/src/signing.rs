@@ -22,10 +22,7 @@ pub extern "C" fn capsula_sign(
     message_len: c_uint,
 ) -> *mut CapsulaResult {
     if private_key_der.is_null() || message.is_null() {
-        return CapsulaResult::error_boxed(
-            CapsulaError::InvalidInput,
-            "Input pointers are null",
-        );
+        return CapsulaResult::error_boxed(CapsulaError::InvalidInput, "Input pointers are null");
     }
 
     let key_slice = unsafe { std::slice::from_raw_parts(private_key_der, key_len as usize) };

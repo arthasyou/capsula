@@ -12,22 +12,22 @@ pub mod ocsp;
 pub mod validator;
 
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 
-use crate::{
-    error::{Result as PkiResult},
-    lifecycle::{
-        CertificateLifecycle, CertificateStatus as LifecycleStatus,
-        revocation::{RevocationReason as LifecycleRevocationReason}
-    },
-};
-
+pub use cache::{CacheStats, StatusCache};
 // 重新导出子模块类型
 pub use crl::{CRLManager, CertificateRevocationList, RevocationEntry};
-pub use ocsp::{OCSPResponder, OCSPRequest, OCSPResponse, OCSPStatus};
-pub use cache::{StatusCache, CacheStats};
+pub use ocsp::{OCSPRequest, OCSPResponder, OCSPResponse, OCSPStatus};
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 pub use validator::CertificateValidator;
+
+use crate::{
+    error::Result as PkiResult,
+    lifecycle::{
+        revocation::RevocationReason as LifecycleRevocationReason, CertificateLifecycle,
+        CertificateStatus as LifecycleStatus,
+    },
+};
 
 /// 证书状态查询结果
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -247,12 +247,12 @@ impl CertificateStatusManager {
 
     /// 查询单个证书状态
     pub fn query_certificate_status(
-        &mut self, 
+        &mut self,
         serial_number: &str,
         allow_cached: bool,
     ) -> PkiResult<StatusResponse> {
         let start_time = std::time::Instant::now();
-        
+
         // 1. 检查缓存（如果允许）
         if allow_cached {
             if let Some(cached_response) = self.cache.get(serial_number) {
@@ -271,8 +271,8 @@ impl CertificateStatusManager {
                         revocation_serial: Some(crl_manager.get_crl().crl_number.to_string()),
                     },
                     query_time: OffsetDateTime::now_utc(),
-                    source: QuerySource::CRL { 
-                        crl_number: crl_manager.get_crl().crl_number 
+                    source: QuerySource::CRL {
+                        crl_number: crl_manager.get_crl().crl_number,
                     },
                     from_cache: false,
                     query_duration_ms: start_time.elapsed().as_millis() as u64,
@@ -285,7 +285,7 @@ impl CertificateStatusManager {
             }
         }
 
-        // 3. 尝试OCSP查询  
+        // 3. 尝试OCSP查询
         if let Some(ocsp_responder) = self.ocsp_responder.as_mut() {
             match ocsp_responder.query_status(serial_number) {
                 Ok(ocsp_response) => {
@@ -295,12 +295,13 @@ impl CertificateStatusManager {
                             OCSPStatus::Good => CertificateStatus::Valid {
                                 validated_at: ocsp_response.response_time,
                             },
-                            OCSPStatus::Revoked { reason, revocation_time } => {
-                                CertificateStatus::Revoked {
-                                    reason,
-                                    revoked_at: revocation_time,
-                                    revocation_serial: None,
-                                }
+                            OCSPStatus::Revoked {
+                                reason,
+                                revocation_time,
+                            } => CertificateStatus::Revoked {
+                                reason,
+                                revoked_at: revocation_time,
+                                revocation_serial: None,
                             },
                             OCSPStatus::Unknown => CertificateStatus::Unknown {
                                 queried_at: OffsetDateTime::now_utc(),
@@ -308,8 +309,8 @@ impl CertificateStatusManager {
                             },
                         },
                         query_time: OffsetDateTime::now_utc(),
-                        source: QuerySource::OCSP { 
-                            responder_url: ocsp_response.responder_url 
+                        source: QuerySource::OCSP {
+                            responder_url: ocsp_response.responder_url,
                         },
                         from_cache: false,
                         query_duration_ms: start_time.elapsed().as_millis() as u64,
@@ -389,12 +390,9 @@ impl CertificateStatusManager {
     }
 
     /// 集成生命周期管理模块查询状态
-    pub fn query_from_lifecycle(
-        &self,
-        certificate: &CertificateLifecycle,
-    ) -> StatusResponse {
+    pub fn query_from_lifecycle(&self, certificate: &CertificateLifecycle) -> StatusResponse {
         let start_time = std::time::Instant::now();
-        
+
         let status = match &certificate.status {
             LifecycleStatus::Valid => CertificateStatus::Valid {
                 validated_at: certificate.last_checked,
@@ -456,30 +454,44 @@ impl CertificateStatusManager {
     // 私有辅助方法
 
     /// 映射吊销原因：从CRL类型到统一类型
-    pub fn map_revocation_reason(&self, reason: &crate::types::RevocationReason) -> RevocationReason {
+    pub fn map_revocation_reason(
+        &self,
+        reason: &crate::types::RevocationReason,
+    ) -> RevocationReason {
         match reason {
             crate::types::RevocationReason::Unspecified => RevocationReason::Unspecified,
             crate::types::RevocationReason::KeyCompromise => RevocationReason::KeyCompromise,
             crate::types::RevocationReason::CACompromise => RevocationReason::CACompromise,
-            crate::types::RevocationReason::AffiliationChanged => RevocationReason::AffiliationChanged,
+            crate::types::RevocationReason::AffiliationChanged => {
+                RevocationReason::AffiliationChanged
+            }
             crate::types::RevocationReason::Superseded => RevocationReason::Superseded,
-            crate::types::RevocationReason::CessationOfOperation => RevocationReason::CessationOfOperation,
+            crate::types::RevocationReason::CessationOfOperation => {
+                RevocationReason::CessationOfOperation
+            }
             crate::types::RevocationReason::CertificateHold => RevocationReason::CertificateHold,
             crate::types::RevocationReason::RemoveFromCRL => RevocationReason::RemoveFromCRL,
-            crate::types::RevocationReason::PrivilegeWithdrawn => RevocationReason::PrivilegeWithdrawn,
+            crate::types::RevocationReason::PrivilegeWithdrawn => {
+                RevocationReason::PrivilegeWithdrawn
+            }
             crate::types::RevocationReason::AACompromise => RevocationReason::AACompromise,
         }
     }
 
     /// 映射吊销原因：从生命周期类型到统一类型
-    fn map_lifecycle_revocation_reason(&self, reason: &LifecycleRevocationReason) -> RevocationReason {
+    fn map_lifecycle_revocation_reason(
+        &self,
+        reason: &LifecycleRevocationReason,
+    ) -> RevocationReason {
         match reason {
             LifecycleRevocationReason::Unspecified => RevocationReason::Unspecified,
             LifecycleRevocationReason::KeyCompromise => RevocationReason::KeyCompromise,
             LifecycleRevocationReason::CACompromise => RevocationReason::CACompromise,
             LifecycleRevocationReason::AffiliationChanged => RevocationReason::AffiliationChanged,
             LifecycleRevocationReason::Superseded => RevocationReason::Superseded,
-            LifecycleRevocationReason::CessationOfOperation => RevocationReason::CessationOfOperation,
+            LifecycleRevocationReason::CessationOfOperation => {
+                RevocationReason::CessationOfOperation
+            }
             LifecycleRevocationReason::CertificateHold => RevocationReason::CertificateHold,
             LifecycleRevocationReason::RemoveFromCRL => RevocationReason::RemoveFromCRL,
             LifecycleRevocationReason::PrivilegeWithdrawn => RevocationReason::PrivilegeWithdrawn,
@@ -496,18 +508,18 @@ impl Default for CertificateStatusManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::types::RevocationReason as CrlRevocationReason;
-    use crate::status::crl::CRLManager;
     use capsula_key::Curve25519;
     use time::Duration;
+
+    use super::*;
+    use crate::{status::crl::CRLManager, types::RevocationReason as CrlRevocationReason};
 
     fn create_test_crl_manager() -> CRLManager {
         let keypair = Curve25519::generate().unwrap();
         CRLManager::new(
             "CN=Test CA".to_string(),
             keypair,
-            7, // 7 days validity
+            7,    // 7 days validity
             true, // auto sign
         )
     }
@@ -528,25 +540,25 @@ mod tests {
     #[test]
     fn test_certificate_status_manager_with_crl() {
         let crl_manager = create_test_crl_manager();
-        let manager = CertificateStatusManager::new(StatusQueryConfig::default())
-            .with_crl(crl_manager);
-        
+        let manager =
+            CertificateStatusManager::new(StatusQueryConfig::default()).with_crl(crl_manager);
+
         assert!(manager.crl_manager.is_some());
     }
 
     #[test]
     fn test_certificate_status_manager_with_ocsp() {
         let ocsp_responder = create_test_ocsp_responder();
-        let manager = CertificateStatusManager::new(StatusQueryConfig::default())
-            .with_ocsp(ocsp_responder);
-        
+        let manager =
+            CertificateStatusManager::new(StatusQueryConfig::default()).with_ocsp(ocsp_responder);
+
         assert!(manager.ocsp_responder.is_some());
     }
 
     #[test]
     fn test_query_certificate_status_unknown() {
         let mut manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         let result = manager.query_certificate_status("12345", true).unwrap();
         assert_eq!(result.serial_number, "12345");
         assert!(matches!(result.status, CertificateStatus::Unknown { .. }));
@@ -562,16 +574,16 @@ mod tests {
             CrlRevocationReason::KeyCompromise,
             None,
         );
-        
-        let mut manager = CertificateStatusManager::new(StatusQueryConfig::default())
-            .with_crl(crl_manager);
-        
+
+        let mut manager =
+            CertificateStatusManager::new(StatusQueryConfig::default()).with_crl(crl_manager);
+
         let result = manager.query_certificate_status("12345", false).unwrap();
         assert_eq!(result.serial_number, "12345");
         assert!(matches!(result.status, CertificateStatus::Revoked { .. }));
         assert_eq!(result.confidence, 1.0);
         assert!(!result.from_cache);
-        
+
         if let CertificateStatus::Revoked { reason, .. } = result.status {
             assert_eq!(reason, RevocationReason::KeyCompromise);
         }
@@ -581,14 +593,11 @@ mod tests {
     fn test_query_certificate_status_with_ocsp_good() {
         let mut ocsp_responder = create_test_ocsp_responder();
         // Add a certificate with GOOD status
-        let _ = ocsp_responder.add_certificate(
-            "12345".to_string(),
-            super::ocsp::OCSPStatus::Good,
-        );
-        
-        let mut manager = CertificateStatusManager::new(StatusQueryConfig::default())
-            .with_ocsp(ocsp_responder);
-        
+        let _ = ocsp_responder.add_certificate("12345".to_string(), super::ocsp::OCSPStatus::Good);
+
+        let mut manager =
+            CertificateStatusManager::new(StatusQueryConfig::default()).with_ocsp(ocsp_responder);
+
         let result = manager.query_certificate_status("12345", false).unwrap();
         assert_eq!(result.serial_number, "12345");
         assert!(matches!(result.status, CertificateStatus::Valid { .. }));
@@ -599,11 +608,11 @@ mod tests {
     #[test]
     fn test_query_certificate_status_caching() {
         let mut manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         // First query - should miss cache
         let result1 = manager.query_certificate_status("12345", true).unwrap();
         assert!(!result1.from_cache);
-        
+
         // Second query - should hit cache (the cache is updated in the first query)
         let result2 = manager.query_certificate_status("12345", true).unwrap();
         // Note: Since we're querying unknown certificates, they'll be cached but marked as unknown
@@ -613,14 +622,14 @@ mod tests {
     #[test]
     fn test_batch_query_certificate_status() {
         let mut manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         let request = BatchStatusRequest {
             serial_numbers: vec!["12345".to_string(), "67890".to_string()],
             allow_cached: true,
             max_cache_age_seconds: Some(3600),
             timeout_seconds: Some(30),
         };
-        
+
         let result = manager.batch_query_certificate_status(request).unwrap();
         assert_eq!(result.success_count, 2);
         assert_eq!(result.failed_count, 0);
@@ -654,16 +663,16 @@ mod tests {
     #[test]
     fn test_config_access() {
         let mut manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         // 测试获取配置
         let config = manager.get_config();
         assert_eq!(config.default_cache_ttl_seconds, 3600);
-        
+
         // 测试更新配置
         let mut new_config = StatusQueryConfig::default();
         new_config.default_cache_ttl_seconds = 7200;
         manager.update_config(new_config);
-        
+
         let updated_config = manager.get_config();
         assert_eq!(updated_config.default_cache_ttl_seconds, 7200);
     }
@@ -671,25 +680,25 @@ mod tests {
     #[test]
     fn test_cleanup_expired_cache() {
         let mut manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         // Add a query to cache
         let _ = manager.query_certificate_status("12345", false);
-        
+
         // Cleanup expired cache (nothing should be expired immediately)
         manager.cleanup_expired_cache();
-        
+
         // Test passes if no panic occurs
     }
 
     #[test]
     fn test_revocation_reason_mapping() {
         let manager = CertificateStatusManager::new(StatusQueryConfig::default());
-        
+
         // Test CRL revocation reason mapping
         let crl_reason = CrlRevocationReason::KeyCompromise;
         let mapped = manager.map_revocation_reason(&crl_reason);
         assert_eq!(mapped, RevocationReason::KeyCompromise);
-        
+
         // Test other reasons
         let crl_reason = CrlRevocationReason::CACompromise;
         let mapped = manager.map_revocation_reason(&crl_reason);
@@ -701,10 +710,10 @@ mod tests {
         let status = CertificateStatus::Valid {
             validated_at: OffsetDateTime::now_utc(),
         };
-        
+
         let json = serde_json::to_string(&status).unwrap();
         let deserialized: CertificateStatus = serde_json::from_str(&json).unwrap();
-        
+
         assert!(matches!(deserialized, CertificateStatus::Valid { .. }));
     }
 
@@ -721,10 +730,10 @@ mod tests {
             query_duration_ms: 100,
             confidence: 1.0,
         };
-        
+
         let json = serde_json::to_string(&response).unwrap();
         let deserialized: StatusResponse = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(deserialized.serial_number, "12345");
         assert_eq!(deserialized.confidence, 1.0);
     }
@@ -737,10 +746,10 @@ mod tests {
             max_cache_age_seconds: Some(3600),
             timeout_seconds: Some(30),
         };
-        
+
         let json = serde_json::to_string(&request).unwrap();
         let deserialized: BatchStatusRequest = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(deserialized.serial_numbers.len(), 2);
         assert!(deserialized.allow_cached);
         assert_eq!(deserialized.max_cache_age_seconds, Some(3600));
@@ -748,14 +757,13 @@ mod tests {
 
     #[test]
     fn test_lifecycle_integration() {
-        use crate::lifecycle::CertificateLifecycle;
-        use crate::lifecycle::CertificateStatus as LifecycleStatus;
-        
+        use crate::lifecycle::{CertificateLifecycle, CertificateStatus as LifecycleStatus};
+
         let manager = CertificateStatusManager::new(StatusQueryConfig::default())
             .with_lifecycle_integration();
-        
+
         assert!(manager.lifecycle_integration);
-        
+
         // Create a mock certificate lifecycle
         let lifecycle = CertificateLifecycle {
             serial_number: "12345".to_string(),
@@ -767,7 +775,7 @@ mod tests {
             renewal_history: vec![],
             last_checked: OffsetDateTime::now_utc(),
         };
-        
+
         let response = manager.query_from_lifecycle(&lifecycle);
         assert_eq!(response.serial_number, "12345");
         assert!(matches!(response.status, CertificateStatus::Valid { .. }));

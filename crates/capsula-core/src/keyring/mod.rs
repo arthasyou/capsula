@@ -36,7 +36,6 @@ impl KeyWrap {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

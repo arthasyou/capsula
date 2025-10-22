@@ -7,15 +7,14 @@ use std::collections::HashMap;
 use capsula_key::Curve25519;
 use serde::{Deserialize, Serialize};
 
+use super::{authority::Authority, config::Config};
 use crate::{
     error::{PkiError, Result as PkiResult},
-    ra::{cert::CertificateSubject, Csr, Processor, ProcessingResult},
+    ra::{cert::CertificateSubject, Csr, ProcessingResult, Processor},
 };
 
-use super::{authority::Authority, config::Config};
-
 /// CA管理器
-/// 
+///
 /// 负责管理多个CA实例和证书签发流程
 pub struct Manager {
     /// CA实例存储 (CA ID -> Authority)
@@ -89,12 +88,16 @@ impl Manager {
     /// 创建根CA
     pub fn create_root_ca(&mut self, ca_id: String, config: Config) -> PkiResult<String> {
         // 验证配置
-        config.validate()
+        config
+            .validate()
             .map_err(|e| PkiError::CAError(format!("Invalid CA config: {e}")))?;
 
         // 检查ID是否已存在
         if self.cas.contains_key(&ca_id) {
-            return Err(PkiError::CAError(format!("CA with ID '{}' already exists", ca_id)));
+            return Err(PkiError::CAError(format!(
+                "CA with ID '{}' already exists",
+                ca_id
+            )));
         }
 
         // 创建根CA
@@ -119,7 +122,8 @@ impl Manager {
         config: Config,
     ) -> PkiResult<String> {
         // 验证配置
-        config.validate()
+        config
+            .validate()
             .map_err(|e| PkiError::CAError(format!("Invalid CA config: {e}")))?;
 
         // 检查父CA是否存在
@@ -152,7 +156,9 @@ impl Manager {
 
     /// 获取CA信息
     pub fn get_ca_info(&self, ca_id: &str) -> PkiResult<CAInfo> {
-        let ca = self.cas.get(ca_id)
+        let ca = self
+            .cas
+            .get(ca_id)
             .ok_or_else(|| PkiError::CAError(format!("CA '{}' not found", ca_id)))?;
 
         Ok(CAInfo {
@@ -183,15 +189,20 @@ impl Manager {
     }
 
     /// 签发证书 (直接签发，不经过RA)
-    pub fn issue_certificate_direct(&mut self, request: IssuanceRequest) -> PkiResult<IssuanceResult> {
-        let ca = self.cas.get_mut(&request.ca_id)
+    pub fn issue_certificate_direct(
+        &mut self,
+        request: IssuanceRequest,
+    ) -> PkiResult<IssuanceResult> {
+        let ca = self
+            .cas
+            .get_mut(&request.ca_id)
             .ok_or_else(|| PkiError::CAError(format!("CA '{}' not found", request.ca_id)))?;
 
         // TODO: Parse public_key_info string to create Curve25519 key
         // For now, create a temporary key - this needs to be properly implemented
         let temp_key = Curve25519::generate()
             .map_err(|e| PkiError::CAError(format!("Failed to parse public key: {e}")))?;
-        
+
         let certificate = ca.issue_certificate(
             request.subject,
             &temp_key,
@@ -215,7 +226,9 @@ impl Manager {
         context: crate::ra::Context,
         ca_id: Option<String>,
     ) -> PkiResult<IssuanceResult> {
-        let processor = self.ra_processor.as_ref()
+        let processor = self
+            .ra_processor
+            .as_ref()
             .ok_or_else(|| PkiError::CAError("RA processor not configured".to_string()))?;
 
         // RA处理
@@ -229,17 +242,23 @@ impl Manager {
         }
 
         // 确定使用的CA
-        let ca_id = ca_id.or_else(|| self.default_root_ca.clone())
-            .ok_or_else(|| PkiError::CAError("No CA specified and no default CA available".to_string()))?;
+        let ca_id = ca_id
+            .or_else(|| self.default_root_ca.clone())
+            .ok_or_else(|| {
+                PkiError::CAError("No CA specified and no default CA available".to_string())
+            })?;
 
         // 签发证书
-        let ca = self.cas.get_mut(&ca_id)
+        let ca = self
+            .cas
+            .get_mut(&ca_id)
             .ok_or_else(|| PkiError::CAError(format!("CA '{}' not found", ca_id)))?;
 
         // 从CSR获取主体信息
-        let csr_subject = csr.subject()
+        let csr_subject = csr
+            .subject()
             .map_err(|e| PkiError::CAError(format!("Failed to get CSR subject: {e}")))?;
-        
+
         // Convert CsrSubject to CertificateSubject
         let cert_subject = crate::ra::cert::CertificateSubject {
             common_name: csr_subject.common_name,
@@ -258,7 +277,7 @@ impl Manager {
         let certificate = ca.issue_certificate(
             cert_subject,
             &temp_key,
-            None, // 使用CA默认有效期
+            None,  // 使用CA默认有效期
             false, // 通过RA签发的通常不是CA证书
         )?;
 
@@ -284,7 +303,10 @@ impl Manager {
 
         let ca = &self.cas[&ca_id];
         if !ca.is_root() {
-            return Err(PkiError::CAError(format!("CA '{}' is not a root CA", ca_id)));
+            return Err(PkiError::CAError(format!(
+                "CA '{}' is not a root CA",
+                ca_id
+            )));
         }
 
         self.default_root_ca = Some(ca_id);
@@ -308,7 +330,9 @@ impl Manager {
 
     /// 获取CA证书
     pub fn get_ca_certificate(&self, ca_id: &str) -> PkiResult<&crate::ra::cert::X509Certificate> {
-        let ca = self.cas.get(ca_id)
+        let ca = self
+            .cas
+            .get(ca_id)
             .ok_or_else(|| PkiError::CAError(format!("CA '{}' not found", ca_id)))?;
         Ok(ca.certificate())
     }
@@ -330,7 +354,7 @@ impl Manager {
         let root_cas = self.cas.values().filter(|ca| ca.is_root()).count();
         let intermediate_cas = total_cas - root_cas;
         let total_issued = self.cas.values().map(|ca| ca.issued_count()).sum();
-        
+
         let valid_cas = self.cas.values().filter(|ca| ca.is_valid()).count();
 
         ManagerStatistics {
@@ -385,7 +409,7 @@ mod tests {
     fn test_create_root_ca() {
         let mut manager = Manager::new();
         let config = Config::default();
-        
+
         let result = manager.create_root_ca("root-ca-1".to_string(), config);
         assert!(result.is_ok());
         assert_eq!(manager.cas.len(), 1);
@@ -396,10 +420,12 @@ mod tests {
     fn test_create_intermediate_ca() {
         let mut manager = Manager::new();
         let root_config = Config::root_ca("Root CA", "Test Org");
-        
+
         // 创建根CA
-        manager.create_root_ca("root-ca".to_string(), root_config).unwrap();
-        
+        manager
+            .create_root_ca("root-ca".to_string(), root_config)
+            .unwrap();
+
         // 创建中间CA
         let intermediate_config = Config::intermediate_ca("Intermediate CA", "Test Org");
         let result = manager.create_intermediate_ca(
@@ -407,7 +433,7 @@ mod tests {
             "intermediate-ca".to_string(),
             intermediate_config,
         );
-        
+
         assert!(result.is_ok());
         assert_eq!(manager.cas.len(), 2);
     }
@@ -416,10 +442,14 @@ mod tests {
     fn test_list_cas() {
         let mut manager = Manager::new();
         let config = Config::default();
-        
-        manager.create_root_ca("root-ca-1".to_string(), config.clone()).unwrap();
-        manager.create_root_ca("root-ca-2".to_string(), config).unwrap();
-        
+
+        manager
+            .create_root_ca("root-ca-1".to_string(), config.clone())
+            .unwrap();
+        manager
+            .create_root_ca("root-ca-2".to_string(), config)
+            .unwrap();
+
         let cas = manager.list_cas();
         assert_eq!(cas.len(), 2);
         assert!(cas.iter().any(|ca| ca.id == "root-ca-1"));
@@ -431,17 +461,21 @@ mod tests {
         let mut manager = Manager::new();
         let root_config = Config::root_ca("Root CA", "Test Org");
         let intermediate_config = Config::intermediate_ca("Intermediate CA", "Test Org");
-        
+
         // 创建根CA
-        manager.create_root_ca("root-ca".to_string(), root_config).unwrap();
-        
+        manager
+            .create_root_ca("root-ca".to_string(), root_config)
+            .unwrap();
+
         // 创建中间CA
-        manager.create_intermediate_ca(
-            "root-ca",
-            "intermediate-ca".to_string(),
-            intermediate_config,
-        ).unwrap();
-        
+        manager
+            .create_intermediate_ca(
+                "root-ca",
+                "intermediate-ca".to_string(),
+                intermediate_config,
+            )
+            .unwrap();
+
         let stats = manager.get_statistics();
         assert_eq!(stats.total_cas, 2);
         assert_eq!(stats.root_cas, 1);

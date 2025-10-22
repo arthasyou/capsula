@@ -2,19 +2,19 @@
 //!
 //! 提供证书生命周期的自动化管理功能，包括自动续期、自动吊销检查等
 
-use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 use std::collections::HashMap;
 
-use crate::{
-    error::{PkiError, Result as PkiResult},
-    ca::Manager as CAManager,
-};
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 use super::{
-    CertificateLifecycle, CertificateStatus,
     policy::AutomationPolicy,
-    renewal::{RenewalRequest, RenewalReason},
+    renewal::{RenewalReason, RenewalRequest},
+    CertificateLifecycle, CertificateStatus,
+};
+use crate::{
+    ca::Manager as CAManager,
+    error::{PkiError, Result as PkiResult},
 };
 
 /// 自动化引擎
@@ -69,15 +69,9 @@ pub enum AutomationAction {
         new_validity_days: u32,
     },
     /// 发送通知
-    SendNotification {
-        recipient: String,
-        message: String,
-    },
+    SendNotification { recipient: String, message: String },
     /// 记录日志
-    LogEvent {
-        level: String,
-        message: String,
-    },
+    LogEvent { level: String, message: String },
     /// 更新证书状态
     UpdateStatus {
         certificate_serial: String,
@@ -212,7 +206,7 @@ impl AutomationEngine {
         // 执行自动续期
         for serial in certificates_to_renew {
             let renewal_result = self.perform_auto_renewal(&serial, certificates, ca_manager);
-            
+
             match renewal_result {
                 Ok(new_serial) => {
                     events.push(AutomationEvent::AutoRenewal {
@@ -226,7 +220,10 @@ impl AutomationEngine {
 
                     // 记录成功任务
                     self.record_task(AutomationTask {
-                        task_id: format!("AUTO_RENEW_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase()),
+                        task_id: format!(
+                            "AUTO_RENEW_{}",
+                            uuid::Uuid::new_v4().to_string()[.. 8].to_uppercase()
+                        ),
                         task_type: AutomationTaskType::AutoRenewal,
                         certificate_serial: serial,
                         status: TaskStatus::Completed,
@@ -236,7 +233,7 @@ impl AutomationEngine {
                         result: Some(format!("Renewed to certificate {}", new_serial)),
                         error: None,
                     });
-                },
+                }
                 Err(error) => {
                     events.push(AutomationEvent::AutoRenewal {
                         original_serial: serial.clone(),
@@ -249,7 +246,10 @@ impl AutomationEngine {
 
                     // 记录失败任务
                     self.record_task(AutomationTask {
-                        task_id: format!("AUTO_RENEW_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase()),
+                        task_id: format!(
+                            "AUTO_RENEW_{}",
+                            uuid::Uuid::new_v4().to_string()[.. 8].to_uppercase()
+                        ),
                         task_type: AutomationTaskType::AutoRenewal,
                         certificate_serial: serial,
                         status: TaskStatus::Failed,
@@ -282,7 +282,7 @@ impl AutomationEngine {
         for (serial, lifecycle) in certificates {
             // 执行吊销检查
             let check_result = self.perform_revocation_check(lifecycle);
-            
+
             events.push(AutomationEvent::RevocationCheck {
                 serial_number: serial.clone(),
                 check_result: check_result.clone(),
@@ -292,13 +292,20 @@ impl AutomationEngine {
             // 记录检查任务
             let task_result = match &check_result {
                 RevocationCheckResult::Normal => "Certificate is normal".to_string(),
-                RevocationCheckResult::Suspicious { reason } => format!("Suspicious activity: {}", reason),
-                RevocationCheckResult::RecommendRevocation { reason } => format!("Recommend revocation: {}", reason),
+                RevocationCheckResult::Suspicious { reason } => {
+                    format!("Suspicious activity: {}", reason)
+                }
+                RevocationCheckResult::RecommendRevocation { reason } => {
+                    format!("Recommend revocation: {}", reason)
+                }
                 RevocationCheckResult::CheckFailed { error } => format!("Check failed: {}", error),
             };
 
             self.record_task(AutomationTask {
-                task_id: format!("REVOKE_CHECK_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase()),
+                task_id: format!(
+                    "REVOKE_CHECK_{}",
+                    uuid::Uuid::new_v4().to_string()[.. 8].to_uppercase()
+                ),
                 task_type: AutomationTaskType::RevocationCheck,
                 certificate_serial: serial.clone(),
                 status: TaskStatus::Completed,
@@ -322,7 +329,8 @@ impl AutomationEngine {
     ) -> PkiResult<Vec<AutomationEvent>> {
         let now = OffsetDateTime::now_utc();
         let time_since_last_run = now - self.last_run_time;
-        let automation_frequency = time::Duration::hours(self.policy.automation_frequency_hours as i64);
+        let automation_frequency =
+            time::Duration::hours(self.policy.automation_frequency_hours as i64);
 
         // 检查是否需要运行自动化任务
         if time_since_last_run < automation_frequency {
@@ -364,14 +372,14 @@ impl AutomationEngine {
                     if task.task_type == AutomationTaskType::AutoRenewal {
                         auto_renewal_success += 1;
                     }
-                },
+                }
                 TaskStatus::Failed => {
                     failed_count += 1;
                     if task.task_type == AutomationTaskType::AutoRenewal {
                         auto_renewal_failed += 1;
                     }
-                },
-                TaskStatus::Skipped => {},
+                }
+                TaskStatus::Skipped => {}
             }
         }
 
@@ -403,8 +411,9 @@ impl AutomationEngine {
     /// 清理旧的任务历史
     pub fn cleanup_old_tasks(&mut self, retention_days: u32) {
         let cutoff_date = OffsetDateTime::now_utc() - time::Duration::days(retention_days as i64);
-        
-        self.task_history.retain(|task| task.created_at > cutoff_date);
+
+        self.task_history
+            .retain(|task| task.created_at > cutoff_date);
     }
 
     /// 更新自动化策略
@@ -444,8 +453,9 @@ impl AutomationEngine {
         // 2. 调用续期管理器
         // 3. 更新证书生命周期信息
 
-        let _lifecycle = certificates.get(certificate_serial)
-            .ok_or_else(|| PkiError::LifecycleError(format!("Certificate {} not found", certificate_serial)))?;
+        let _lifecycle = certificates.get(certificate_serial).ok_or_else(|| {
+            PkiError::LifecycleError(format!("Certificate {} not found", certificate_serial))
+        })?;
 
         // 创建自动续期请求
         let _renewal_request = RenewalRequest {
@@ -458,7 +468,10 @@ impl AutomationEngine {
         };
 
         // 生成新的证书序列号（占位符实现）
-        let new_serial = format!("AUTO_RENEWED_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase());
+        let new_serial = format!(
+            "AUTO_RENEWED_{}",
+            uuid::Uuid::new_v4().to_string()[.. 8].to_uppercase()
+        );
 
         // TODO: 实际调用续期管理器执行续期
         // let mut renewal_manager = RenewalManager::default();
@@ -486,7 +499,7 @@ impl AutomationEngine {
         // 简单的检查逻辑（占位符）
         let now = OffsetDateTime::now_utc();
         let days_since_issued = (now - lifecycle.issued_date).whole_days();
-        
+
         // 检查证书是否异常长时间未使用
         if days_since_issued > 365 && lifecycle.last_checked < now - time::Duration::days(90) {
             RevocationCheckResult::Suspicious {
@@ -500,12 +513,12 @@ impl AutomationEngine {
     /// 记录自动化任务
     fn record_task(&mut self, task: AutomationTask) {
         self.task_history.push(task);
-        
+
         // 限制历史记录数量，避免内存泄漏
         const MAX_HISTORY_SIZE: usize = 10000;
         if self.task_history.len() > MAX_HISTORY_SIZE {
             // 保留最近的记录
-            self.task_history.drain(0..MAX_HISTORY_SIZE / 2);
+            self.task_history.drain(0 .. MAX_HISTORY_SIZE / 2);
         }
     }
 }
@@ -513,7 +526,7 @@ impl AutomationEngine {
 impl Default for AutomationEngine {
     fn default() -> Self {
         use super::policy::AutomationPolicy;
-        
+
         Self::new(AutomationPolicy {
             enable_auto_renewal: false,
             auto_renewal_threshold_days: 30,
@@ -552,7 +565,7 @@ mod tests {
             enable_auto_revocation_check: true,
             automation_frequency_hours: 6,
         };
-        
+
         let engine = AutomationEngine::new(policy);
         assert!(engine.policy.enable_auto_renewal);
         assert_eq!(engine.policy.auto_renewal_threshold_days, 30);
@@ -567,13 +580,13 @@ mod tests {
             enable_auto_revocation_check: false,
             automation_frequency_hours: 24,
         };
-        
+
         let engine = AutomationEngine::new(policy);
-        
+
         // 符合条件的证书类型
         assert!(engine.is_certificate_type_eligible_for_auto_renewal("CN=server.example.com"));
         assert!(engine.is_certificate_type_eligible_for_auto_renewal("CN=client-cert"));
-        
+
         // 不符合条件的证书类型
         assert!(!engine.is_certificate_type_eligible_for_auto_renewal("CN=root-ca"));
     }
@@ -581,12 +594,12 @@ mod tests {
     #[test]
     fn test_revocation_check() {
         let engine = AutomationEngine::default();
-        
+
         // 正常证书
         let normal_cert = create_test_certificate("CERT-001", 100);
         let result = engine.perform_revocation_check(&normal_cert);
         assert!(matches!(result, RevocationCheckResult::Normal));
-        
+
         // 长时间未检查的证书
         let mut old_cert = create_test_certificate("CERT-002", 100);
         old_cert.issued_date = OffsetDateTime::now_utc() - time::Duration::days(400);
@@ -598,7 +611,7 @@ mod tests {
     #[test]
     fn test_task_recording() {
         let mut engine = AutomationEngine::default();
-        
+
         let task = AutomationTask {
             task_id: "TEST-001".to_string(),
             task_type: AutomationTaskType::AutoRenewal,
@@ -610,9 +623,9 @@ mod tests {
             result: Some("Success".to_string()),
             error: None,
         };
-        
+
         engine.record_task(task);
-        
+
         assert_eq!(engine.task_history.len(), 1);
         assert_eq!(engine.task_history[0].task_id, "TEST-001");
     }
@@ -620,7 +633,7 @@ mod tests {
     #[test]
     fn test_statistics() {
         let mut engine = AutomationEngine::default();
-        
+
         // 添加一些任务历史
         engine.record_task(AutomationTask {
             task_id: "TASK-001".to_string(),
@@ -633,7 +646,7 @@ mod tests {
             result: Some("Success".to_string()),
             error: None,
         });
-        
+
         engine.record_task(AutomationTask {
             task_id: "TASK-002".to_string(),
             task_type: AutomationTaskType::AutoRenewal,
@@ -645,7 +658,7 @@ mod tests {
             result: None,
             error: Some("Test error".to_string()),
         });
-        
+
         let stats = engine.get_statistics();
         assert_eq!(stats.total_tasks, 2);
         assert_eq!(stats.completed_tasks, 1);
@@ -657,7 +670,7 @@ mod tests {
     #[test]
     fn test_task_history_by_type() {
         let mut engine = AutomationEngine::default();
-        
+
         // 添加不同类型的任务
         engine.record_task(AutomationTask {
             task_id: "RENEWAL-001".to_string(),
@@ -670,7 +683,7 @@ mod tests {
             result: Some("Success".to_string()),
             error: None,
         });
-        
+
         engine.record_task(AutomationTask {
             task_id: "CHECK-001".to_string(),
             task_type: AutomationTaskType::RevocationCheck,
@@ -682,11 +695,11 @@ mod tests {
             result: Some("Normal".to_string()),
             error: None,
         });
-        
+
         let renewal_tasks = engine.get_task_history_by_type(AutomationTaskType::AutoRenewal);
         assert_eq!(renewal_tasks.len(), 1);
         assert_eq!(renewal_tasks[0].task_id, "RENEWAL-001");
-        
+
         let check_tasks = engine.get_task_history_by_type(AutomationTaskType::RevocationCheck);
         assert_eq!(check_tasks.len(), 1);
         assert_eq!(check_tasks[0].task_id, "CHECK-001");
@@ -695,7 +708,7 @@ mod tests {
     #[test]
     fn test_cleanup_old_tasks() {
         let mut engine = AutomationEngine::default();
-        
+
         // 添加旧任务
         let old_task = AutomationTask {
             task_id: "OLD-001".to_string(),
@@ -708,7 +721,7 @@ mod tests {
             result: Some("Success".to_string()),
             error: None,
         };
-        
+
         // 添加新任务
         let new_task = AutomationTask {
             task_id: "NEW-001".to_string(),
@@ -721,13 +734,13 @@ mod tests {
             result: Some("Success".to_string()),
             error: None,
         };
-        
+
         engine.record_task(old_task);
         engine.record_task(new_task);
-        
+
         // 清理30天前的任务
         engine.cleanup_old_tasks(30);
-        
+
         // 应该只保留新任务
         assert_eq!(engine.task_history.len(), 1);
         assert_eq!(engine.task_history[0].task_id, "NEW-001");

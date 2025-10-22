@@ -99,10 +99,7 @@ impl Authority {
     }
 
     /// 创建中间CA
-    pub fn create_intermediate(
-        &mut self,
-        config: super::config::Config,
-    ) -> PkiResult<Authority> {
+    pub fn create_intermediate(&mut self, config: super::config::Config) -> PkiResult<Authority> {
         // 只有根CA或中间CA可以创建下级CA
         let new_level = match &self.ca_type {
             CAType::Root => 1,
@@ -116,8 +113,9 @@ impl Authority {
             }
         };
 
-        let intermediate_keypair = Curve25519::generate()
-            .map_err(|e| PkiError::CAError(format!("Failed to generate intermediate CA keypair: {e}")))?;
+        let intermediate_keypair = Curve25519::generate().map_err(|e| {
+            PkiError::CAError(format!("Failed to generate intermediate CA keypair: {e}"))
+        })?;
 
         let subject = CertificateSubject {
             country: Some(config.country.clone()),
@@ -149,12 +147,8 @@ impl Authority {
             level: new_level,
         };
 
-        let intermediate_ca = Authority::from_existing(
-            intermediate_keypair,
-            intermediate_cert,
-            config,
-            ca_type,
-        )?;
+        let intermediate_ca =
+            Authority::from_existing(intermediate_keypair, intermediate_cert, config, ca_type)?;
 
         // Note: issued_count already incremented in sign_certificate
         Ok(intermediate_ca)
@@ -168,8 +162,9 @@ impl Authority {
     ) -> PkiResult<X509Certificate> {
         // TODO: 实现真正的证书签发逻辑
         // 目前创建一个临时证书作为占位
-        let cert = create_self_signed_certificate(&self.keypair, cert_info.subject.clone(), cert_info)
-            .map_err(|e| PkiError::CAError(format!("Failed to sign certificate: {e}")))?;
+        let cert =
+            create_self_signed_certificate(&self.keypair, cert_info.subject.clone(), cert_info)
+                .map_err(|e| PkiError::CAError(format!("Failed to sign certificate: {e}")))?;
 
         self.issued_count += 1;
         Ok(cert)
@@ -184,7 +179,7 @@ impl Authority {
         is_ca: bool,
     ) -> PkiResult<X509Certificate> {
         let validity_days = validity_days.unwrap_or(self.config.default_cert_validity_days);
-        
+
         let key_usage = if is_ca {
             vec![
                 "digitalSignature".to_string(),
@@ -192,7 +187,10 @@ impl Authority {
                 "cRLSign".to_string(),
             ]
         } else {
-            vec!["digitalSignature".to_string(), "keyEncipherment".to_string()]
+            vec![
+                "digitalSignature".to_string(),
+                "keyEncipherment".to_string(),
+            ]
         };
 
         let cert_info = CertificateInfo {
@@ -279,7 +277,7 @@ mod tests {
         let config = super::super::config::Config::default();
         let ca = Authority::new_root(config);
         assert!(ca.is_ok());
-        
+
         let ca = ca.unwrap();
         assert!(ca.is_root());
         assert_eq!(ca.chain_level(), 0);
@@ -290,13 +288,13 @@ mod tests {
     fn test_create_intermediate_ca() {
         let config = super::super::config::Config::default();
         let mut root_ca = Authority::new_root(config.clone()).unwrap();
-        
+
         let mut intermediate_config = config.clone();
         intermediate_config.name = "Intermediate CA".to_string();
-        
+
         let intermediate = root_ca.create_intermediate(intermediate_config);
         assert!(intermediate.is_ok());
-        
+
         let intermediate = intermediate.unwrap();
         assert!(!intermediate.is_root());
         assert_eq!(intermediate.chain_level(), 1);
@@ -309,14 +307,14 @@ mod tests {
             max_path_length: Some(1),
             ..Default::default()
         };
-        
+
         let mut root_ca = Authority::new_root(config.clone()).unwrap();
-        
+
         // 创建第一级中间CA应该成功
         let mut intermediate_config = config.clone();
         intermediate_config.name = "Intermediate CA L1".to_string();
         let mut intermediate_l1 = root_ca.create_intermediate(intermediate_config).unwrap();
-        
+
         // 创建第二级中间CA应该失败
         let mut intermediate_l2_config = config.clone();
         intermediate_l2_config.name = "Intermediate CA L2".to_string();

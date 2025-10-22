@@ -752,7 +752,8 @@ mod tests {
 
     use super::*;
 
-    // Simple helper for creating test keys - this focuses on testing ciphertext logic, not key generation
+    // Simple helper for creating test keys - this focuses on testing ciphertext logic, not key
+    // generation
     fn create_test_key() -> Result<(RsaKey, Vec<u8>)> {
         let key_pair = RsaKey::generate_2048()?;
         let public_keys = key_pair.public_keys();
@@ -781,7 +782,11 @@ mod tests {
 
         // Verify inline storage
         match &ciphertext.storage {
-            CipherStorage::Inline { ct_b64, ciphertext_len, ciphertext_digest } => {
+            CipherStorage::Inline {
+                ct_b64,
+                ciphertext_len,
+                ciphertext_digest,
+            } => {
                 assert!(!ct_b64.is_empty());
                 assert!(ciphertext_len.is_some());
                 assert!(ciphertext_digest.is_some());
@@ -822,7 +827,11 @@ mod tests {
 
         // Verify external storage structure
         match &ciphertext.storage {
-            CipherStorage::External { uri, ciphertext_len, ciphertext_digest } => {
+            CipherStorage::External {
+                uri,
+                ciphertext_len,
+                ciphertext_digest,
+            } => {
                 assert!(uri.is_empty()); // Initially empty
                 assert!(ciphertext_len.is_some());
                 assert!(ciphertext_digest.is_some());
@@ -832,16 +841,17 @@ mod tests {
 
         // Test URI management
         assert_eq!(ciphertext.get_external_uri()?, "");
-        
+
         let test_uri = "s3://bucket/file.enc";
         ciphertext.set_external_uri(test_uri.to_string())?;
         assert_eq!(ciphertext.get_external_uri()?, test_uri);
 
         // Test that inline storage rejects URI operations
-        let mut inline_ciphertext = Ciphertext::new_inline_aes(
-            b"inline", aad, &mut HashMap::new(), &public_key_spki
-        )?;
-        assert!(inline_ciphertext.set_external_uri("fail".to_string()).is_err());
+        let mut inline_ciphertext =
+            Ciphertext::new_inline_aes(b"inline", aad, &mut HashMap::new(), &public_key_spki)?;
+        assert!(inline_ciphertext
+            .set_external_uri("fail".to_string())
+            .is_err());
         assert!(inline_ciphertext.get_external_uri().is_err());
 
         // Clean up
@@ -860,19 +870,20 @@ mod tests {
         let (_, public_key_spki) = create_test_key()?;
 
         // Test both algorithms
-        let aes_ciphertext = Ciphertext::new_inline_aes(
-            plaintext, aad, &mut aes_keyring, &public_key_spki
-        )?;
-        let chacha_ciphertext = Ciphertext::new_inline_chacha(
-            plaintext, aad, &mut chacha_keyring, &public_key_spki
-        )?;
+        let aes_ciphertext =
+            Ciphertext::new_inline_aes(plaintext, aad, &mut aes_keyring, &public_key_spki)?;
+        let chacha_ciphertext =
+            Ciphertext::new_inline_chacha(plaintext, aad, &mut chacha_keyring, &public_key_spki)?;
 
         // Verify algorithm types
         assert_eq!(aes_ciphertext.enc, EncAlg::Aes256Gcm);
         assert_eq!(chacha_ciphertext.enc, EncAlg::ChaCha20Poly1305);
 
         // Verify different outputs
-        assert_ne!(aes_ciphertext.get_ciphertext_b64()?, chacha_ciphertext.get_ciphertext_b64()?);
+        assert_ne!(
+            aes_ciphertext.get_ciphertext_b64()?,
+            chacha_ciphertext.get_ciphertext_b64()?
+        );
         assert_ne!(aes_ciphertext.dek_id, chacha_ciphertext.dek_id);
 
         Ok(())
@@ -886,9 +897,8 @@ mod tests {
         let (key_pair, public_key_spki) = create_test_key()?;
 
         // Test inline round trip
-        let ciphertext = Ciphertext::new_inline_aes(
-            original_data, aad, &mut keyring, &public_key_spki
-        )?;
+        let ciphertext =
+            Ciphertext::new_inline_aes(original_data, aad, &mut keyring, &public_key_spki)?;
         let decrypted = ciphertext.decrypt_inline_aes(&keyring, &key_pair)?;
         assert_eq!(decrypted, original_data);
 
@@ -903,9 +913,8 @@ mod tests {
         let (key_pair, public_key_spki) = create_test_key()?;
 
         // Create AES ciphertext but try to decrypt with ChaCha method
-        let aes_ciphertext = Ciphertext::new_inline_aes(
-            plaintext, aad, &mut keyring, &public_key_spki
-        )?;
+        let aes_ciphertext =
+            Ciphertext::new_inline_aes(plaintext, aad, &mut keyring, &public_key_spki)?;
         let result = aes_ciphertext.decrypt_inline_chacha(&keyring, &key_pair);
         assert!(result.is_err()); // Should fail due to algorithm mismatch
 

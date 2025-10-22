@@ -27,17 +27,18 @@ impl Aes {
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         // Generate random nonce (12 bytes for AES-GCM)
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        
+
         // Encrypt the plaintext
-        let ciphertext = self.cipher
+        let ciphertext = self
+            .cipher
             .encrypt(&nonce, plaintext)
             .map_err(|e| Error::Other(format!("AES-GCM encryption failed: {}", e)))?;
-        
+
         // Prepend nonce to ciphertext
         let mut result = Vec::with_capacity(nonce.len() + ciphertext.len());
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
@@ -50,20 +51,26 @@ impl Aes {
     ///
     /// # Returns
     /// Encrypted data with authentication tag, nonce NOT prepended
-    pub fn encrypt_with_nonce_and_aad(&self, plaintext: &[u8], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>> {
+    pub fn encrypt_with_nonce_and_aad(
+        &self,
+        plaintext: &[u8],
+        nonce: &[u8; 12],
+        aad: &[u8],
+    ) -> Result<Vec<u8>> {
         use aes_gcm::aead::AeadInPlace;
-        
+
         let nonce = Nonce::from_slice(nonce);
         let mut buffer = plaintext.to_vec();
-        
+
         // Encrypt in-place with AAD
-        let tag = self.cipher
+        let tag = self
+            .cipher
             .encrypt_in_place_detached(&nonce, aad, &mut buffer)
             .map_err(|e| Error::Other(format!("AES-GCM encryption with AAD failed: {}", e)))?;
-        
+
         // Append authentication tag
         buffer.extend_from_slice(&tag);
-        
+
         Ok(buffer)
     }
 
@@ -73,18 +80,21 @@ impl Aes {
     pub fn decrypt(&self, encrypted_data: &[u8]) -> Result<Vec<u8>> {
         // Check minimum length (12 bytes nonce + at least 16 bytes auth tag)
         if encrypted_data.len() < 28 {
-            return Err(Error::Other("Encrypted data too short for AES-GCM".to_string()));
+            return Err(Error::Other(
+                "Encrypted data too short for AES-GCM".to_string(),
+            ));
         }
-        
+
         // Extract nonce from the first 12 bytes
         let (nonce_bytes, ciphertext) = encrypted_data.split_at(12);
         let nonce = Nonce::from_slice(nonce_bytes);
-        
+
         // Decrypt the ciphertext
-        let plaintext = self.cipher
+        let plaintext = self
+            .cipher
             .decrypt(nonce, ciphertext)
             .map_err(|e| Error::Other(format!("AES-GCM decryption failed: {}", e)))?;
-        
+
         Ok(plaintext)
     }
 
@@ -97,25 +107,32 @@ impl Aes {
     ///
     /// # Returns
     /// Decrypted plaintext
-    pub fn decrypt_with_nonce_and_aad(&self, encrypted_data: &[u8], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>> {
+    pub fn decrypt_with_nonce_and_aad(
+        &self,
+        encrypted_data: &[u8],
+        nonce: &[u8; 12],
+        aad: &[u8],
+    ) -> Result<Vec<u8>> {
         use aes_gcm::aead::AeadInPlace;
-        
+
         if encrypted_data.len() < 16 {
-            return Err(Error::Other("Encrypted data too short for AES-GCM tag".to_string()));
+            return Err(Error::Other(
+                "Encrypted data too short for AES-GCM tag".to_string(),
+            ));
         }
-        
+
         let nonce = Nonce::from_slice(nonce);
-        
+
         // Separate ciphertext and authentication tag
         let tag_start = encrypted_data.len() - 16;
-        let mut buffer = encrypted_data[..tag_start].to_vec();
-        let tag = &encrypted_data[tag_start..];
-        
+        let mut buffer = encrypted_data[.. tag_start].to_vec();
+        let tag = &encrypted_data[tag_start ..];
+
         // Decrypt in-place with AAD
         self.cipher
             .decrypt_in_place_detached(&nonce, aad, &mut buffer, tag.into())
             .map_err(|e| Error::Other(format!("AES-GCM decryption with AAD failed: {}", e)))?;
-        
+
         Ok(buffer)
     }
 }
@@ -154,12 +171,12 @@ mod tests {
     fn test_encrypt_decrypt() {
         let key = [0u8; 32];
         let plaintext = b"Hello, AES-256-GCM!";
-        
+
         // Test standalone functions
         let encrypted = encrypt(&key, plaintext).unwrap();
         let decrypted = decrypt(&key, &encrypted).unwrap();
         assert_eq!(decrypted, plaintext);
-        
+
         // Test struct methods
         let aes = Aes::new(&key).unwrap();
         let encrypted = aes.encrypt(plaintext).unwrap();

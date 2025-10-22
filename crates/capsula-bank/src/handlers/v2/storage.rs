@@ -58,7 +58,7 @@ pub async fn generate_presigned_url(
 
     // 生成唯一的对象键
     let timestamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
-    let random_suffix = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let random_suffix = uuid::Uuid::new_v4().to_string()[.. 8].to_string();
     let object_key = format!(
         "uploads/{}/{}-{}",
         timestamp, random_suffix, request.filename
@@ -98,11 +98,7 @@ pub async fn generate_presigned_url(
 ///
 /// 使用 AWS SDK 生成预签名 URL
 #[allow(dead_code)]
-async fn generate_s3_presigned_url(
-    _bucket: &str,
-    _key: &str,
-    _expires_in: u64,
-) -> Result<String> {
+async fn generate_s3_presigned_url(_bucket: &str, _key: &str, _expires_in: u64) -> Result<String> {
     // 实现：
     // use aws_sdk_s3::presigning::PresigningConfig;
     // let presigning_config = PresigningConfig::expires_in(Duration::from_secs(expires_in))?;

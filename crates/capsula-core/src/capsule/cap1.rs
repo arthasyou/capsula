@@ -1,9 +1,7 @@
+use capsula_key::key::{Key, KeyEncDec, KeySign};
 use serde::{Deserialize, Serialize};
 
-use crate::block::SealedBlock;
-use crate::keyring::Keyring;
-use crate::ContentType;
-use capsula_key::key::{Key, KeyEncDec, KeySign};
+use crate::{block::SealedBlock, keyring::Keyring, ContentType};
 
 /// 1阶数据胶囊：解释层
 ///

@@ -1,6 +1,6 @@
 /// 测试胶囊插入程序
 use capsula_bank::{
-    db::{init_db, capsule},
+    db::{capsule, init_db},
     models::capsule::CapsuleRecord,
     settings::Settings,
 };
@@ -28,10 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 创建测试胶囊数据（模拟 capsula-core 的 Capsule 结构）
     println!("📦 创建测试胶囊...");
-    
+
     let capsule_id = format!("cid:{}", Uuid::new_v4().to_string());
     let owner_id = "user_001";
-    
+
     // 构造完整的胶囊数据（模拟 capsula-core::Capsule 的 JSON 结构）
     let capsule_data = json!({
         "header": {
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         "audit_ref": "audit://medical/2025/01/14/blood_test_001"
     });
-    
+
     // 创建胶囊记录
     let capsule_record = CapsuleRecord::new(
         capsule_id.clone(),
@@ -112,10 +112,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_creator("医院A实验室".to_string())
     .add_metadata("patient_id".to_string(), "P123456".to_string())
     .add_metadata("test_type".to_string(), "全血常规".to_string());
-    
+
     // 插入到数据库
     let created_capsule = capsule::create_capsule(capsule_record).await?;
-    
+
     println!("✅ 胶囊创建成功！\n");
     println!("胶囊详情：");
     println!("  ID: {}", created_capsule.capsule_id);
@@ -124,18 +124,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  类型: {}", created_capsule.content_type);
     println!("  所有者: {}", created_capsule.owner_id);
     println!("  创建者: {:?}", created_capsule.creator);
-    println!("  创建时间: {}", 
+    println!(
+        "  创建时间: {}",
         chrono::DateTime::from_timestamp(created_capsule.created_at, 0)
             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_else(|| "Invalid timestamp".to_string())
     );
     println!("  元数据: {:?}", created_capsule.metadata);
-    
+
     // 查询刚插入的胶囊
     println!("\n📋 查询胶囊...");
     if let Some(queried_capsule) = capsule::get_capsule_by_id(&capsule_id).await? {
         println!("✅ 成功查询到胶囊");
-        
+
         // 解析胶囊数据中的一些信息
         if let Some(header) = queried_capsule.capsule_data.get("header") {
             println!("\n📄 Header 信息：");
@@ -143,13 +144,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  阶段: {:?}", header.get("stage"));
             println!("  内容类型: {:?}", header.get("content_type"));
         }
-        
+
         if let Some(policy) = queried_capsule.capsule_data.get("policy") {
             println!("\n🔐 策略信息：");
             println!("  策略URI: {:?}", policy.get("policy_uri"));
             println!("  权限: {:?}", policy.get("permissions"));
         }
-        
+
         if let Some(payload) = queried_capsule.capsule_data.get("payload") {
             println!("\n📦 载荷信息：");
             println!("  类型: {:?}", payload.get("type"));
@@ -163,14 +164,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("❌ 未找到胶囊");
     }
-    
+
     // 查询用户的所有胶囊
     println!("\n📋 查询用户的所有胶囊...");
     let user_capsules = capsule::get_capsules_by_owner(owner_id).await?;
     println!("✅ 用户 {} 有 {} 个胶囊", owner_id, user_capsules.len());
     for (i, cap) in user_capsules.iter().enumerate() {
-        println!("  {}. {} - 类型: {}, 阶段: {}, 创建: {}", 
-            i + 1, 
+        println!(
+            "  {}. {} - 类型: {}, 阶段: {}, 创建: {}",
+            i + 1,
             cap.capsule_id,
             cap.content_type,
             cap.stage,
@@ -179,16 +181,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|| "Invalid".to_string())
         );
     }
-    
+
     // 测试搜索功能
     println!("\n🔍 搜索医疗类型的胶囊...");
-    let medical_capsules = capsule::search_capsules(
-        None,
-        Some("medical.blood_test"),
-        Some("first"),
-    ).await?;
+    let medical_capsules =
+        capsule::search_capsules(None, Some("medical.blood_test"), Some("first")).await?;
     println!("✅ 找到 {} 个医疗血液测试胶囊", medical_capsules.len());
-    
+
     println!("\n========================================");
     println!("✨ 测试完成！");
     println!("========================================");

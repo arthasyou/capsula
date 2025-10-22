@@ -1,7 +1,8 @@
 //! 密钥生成模块
 
-use crate::error::Result;
 use capsula_key::Key;
+
+use crate::error::Result;
 
 /// 密钥类型
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +29,7 @@ impl KeyGenerator {
         match key_type {
             KeyType::Ed25519 => Ok(Box::new(capsula_key::Curve25519::generate()?)),
             KeyType::ECDSA(_) => Ok(Box::new(capsula_key::P256Key::generate()?)), // 使用P256实现
-            KeyType::RSA(_) => Ok(Box::new(capsula_key::RsaKey::generate_2048()?)), // 使用RSA 2048实现
+            KeyType::RSA(_) => Ok(Box::new(capsula_key::RsaKey::generate_2048()?)), /* 使用RSA 2048实现 */
         }
     }
 }

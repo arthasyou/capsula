@@ -1,16 +1,14 @@
 //! OCSP (在线证书状态协议) 实现
-//! 
+//!
 //! 提供OCSP请求和响应处理功能
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use crate::{
-    error::{PkiError, Result as PkiResult},
-};
-
 use super::RevocationReason as StatusRevocationReason;
+use crate::error::{PkiError, Result as PkiResult};
 
 /// OCSP请求状态
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,7 +84,7 @@ impl Default for OCSPResponderConfig {
             signing_key_id: "default".to_string(),
             response_validity_seconds: 3600, // 1小时
             enable_caching: true,
-            cache_ttl_seconds: 600, // 10分钟
+            cache_ttl_seconds: 600,       // 10分钟
             max_request_size_bytes: 1024, // 1KB
         }
     }
@@ -155,19 +153,24 @@ impl OCSPResponder {
     }
 
     /// 更新证书状态
-    pub fn update_certificate_status(&mut self, serial_number: &str, status: OCSPStatus) -> PkiResult<()> {
+    pub fn update_certificate_status(
+        &mut self,
+        serial_number: &str,
+        status: OCSPStatus,
+    ) -> PkiResult<()> {
         if !self.certificate_database.contains_key(serial_number) {
             return Err(PkiError::CertError(format!(
-                "Certificate {} not found in OCSP database", 
+                "Certificate {} not found in OCSP database",
                 serial_number
             )));
         }
 
-        self.certificate_database.insert(serial_number.to_string(), status);
-        
+        self.certificate_database
+            .insert(serial_number.to_string(), status);
+
         // 清除相关缓存
         self.response_cache.remove(serial_number);
-        
+
         Ok(())
     }
 
@@ -190,7 +193,8 @@ impl OCSPResponder {
         }
 
         // 2. 查询证书状态
-        let status = self.certificate_database
+        let status = self
+            .certificate_database
             .get(serial_number)
             .cloned()
             .unwrap_or(OCSPStatus::Unknown);
@@ -200,9 +204,10 @@ impl OCSPResponder {
             serial_number: serial_number.to_string(),
             status,
             response_time: OffsetDateTime::now_utc(),
-            next_update: Some(OffsetDateTime::now_utc() + time::Duration::seconds(
-                self.config.response_validity_seconds as i64
-            )),
+            next_update: Some(
+                OffsetDateTime::now_utc()
+                    + time::Duration::seconds(self.config.response_validity_seconds as i64),
+            ),
             responder_url: self.config.responder_url.clone(),
             signature: Some(self.generate_signature(serial_number)?),
             nonce: None,
@@ -212,7 +217,7 @@ impl OCSPResponder {
         if self.config.enable_caching {
             self.response_cache.insert(
                 serial_number.to_string(),
-                (response.clone(), OffsetDateTime::now_utc())
+                (response.clone(), OffsetDateTime::now_utc()),
             );
         }
 
@@ -225,7 +230,10 @@ impl OCSPResponder {
     }
 
     /// 批量查询证书状态
-    pub fn batch_query_status(&mut self, serial_numbers: &[String]) -> Vec<PkiResult<OCSPResponse>> {
+    pub fn batch_query_status(
+        &mut self,
+        serial_numbers: &[String],
+    ) -> Vec<PkiResult<OCSPResponse>> {
         serial_numbers
             .iter()
             .map(|serial| self.query_status(serial))
@@ -236,15 +244,17 @@ impl OCSPResponder {
     pub fn handle_request(&mut self, request: &OCSPRequest) -> PkiResult<OCSPResponse> {
         // 基本验证
         if request.serial_number.is_empty() {
-            return Err(PkiError::ValidationError("Empty serial number in OCSP request".to_string()));
+            return Err(PkiError::ValidationError(
+                "Empty serial number in OCSP request".to_string(),
+            ));
         }
 
         // 查询状态
         let mut response = self.query_status(&request.serial_number)?;
-        
+
         // 设置nonce
         response.nonce = request.nonce.clone();
-        
+
         Ok(response)
     }
 
@@ -319,13 +329,13 @@ impl OCSPResponder {
 
     /// 导入证书状态数据
     pub fn import_database(&mut self, json_data: &str) -> PkiResult<()> {
-        let database: HashMap<String, OCSPStatus> = serde_json::from_str(json_data)
-            .map_err(PkiError::SerializationError)?;
-        
+        let database: HashMap<String, OCSPStatus> =
+            serde_json::from_str(json_data).map_err(PkiError::SerializationError)?;
+
         self.certificate_database = database;
         // 清除缓存，因为数据已更新
         self.response_cache.clear();
-        
+
         Ok(())
     }
 
@@ -345,8 +355,9 @@ impl OCSPResponder {
             self.stats.average_response_time_ms = new_response_time;
         } else {
             // 计算移动平均值
-            self.stats.average_response_time_ms = 
-                (self.stats.average_response_time_ms * (total_successful - 1) as f64 + new_response_time) 
+            self.stats.average_response_time_ms = (self.stats.average_response_time_ms
+                * (total_successful - 1) as f64
+                + new_response_time)
                 / total_successful as f64;
         }
     }
@@ -437,7 +448,7 @@ impl OCSPClient {
 
         // TODO: 实现实际的HTTP请求到OCSP服务器
         // 这里是一个模拟实现
-        
+
         // 模拟网络延迟
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -476,8 +487,9 @@ impl OCSPClient {
         if total_successful == 1 {
             self.stats.average_response_time_ms = new_response_time;
         } else {
-            self.stats.average_response_time_ms = 
-                (self.stats.average_response_time_ms * (total_successful - 1) as f64 + new_response_time) 
+            self.stats.average_response_time_ms = (self.stats.average_response_time_ms
+                * (total_successful - 1) as f64
+                + new_response_time)
                 / total_successful as f64;
         }
     }
@@ -497,21 +509,15 @@ mod tests {
     #[test]
     fn test_add_certificate() {
         let mut responder = OCSPResponder::default();
-        responder.add_certificate(
-            "12345".to_string(), 
-            OCSPStatus::Good
-        );
-        
+        responder.add_certificate("12345".to_string(), OCSPStatus::Good);
+
         assert_eq!(responder.certificate_count(), 1);
     }
 
     #[test]
     fn test_query_status() {
         let mut responder = OCSPResponder::default();
-        responder.add_certificate(
-            "12345".to_string(), 
-            OCSPStatus::Good
-        );
+        responder.add_certificate("12345".to_string(), OCSPStatus::Good);
 
         let response = responder.query_status("12345").unwrap();
         assert_eq!(response.serial_number, "12345");
@@ -528,16 +534,15 @@ mod tests {
     #[test]
     fn test_revoke_certificate() {
         let mut responder = OCSPResponder::default();
-        responder.add_certificate(
-            "12345".to_string(), 
-            OCSPStatus::Good
-        );
+        responder.add_certificate("12345".to_string(), OCSPStatus::Good);
 
-        responder.revoke_certificate(
-            "12345".to_string(),
-            StatusRevocationReason::KeyCompromise,
-            OffsetDateTime::now_utc(),
-        ).unwrap();
+        responder
+            .revoke_certificate(
+                "12345".to_string(),
+                StatusRevocationReason::KeyCompromise,
+                OffsetDateTime::now_utc(),
+            )
+            .unwrap();
 
         let response = responder.query_status("12345").unwrap();
         assert!(matches!(response.status, OCSPStatus::Revoked { .. }));
@@ -551,10 +556,7 @@ mod tests {
             ..Default::default()
         };
         let mut responder = OCSPResponder::new(config);
-        responder.add_certificate(
-            "12345".to_string(), 
-            OCSPStatus::Good
-        );
+        responder.add_certificate("12345".to_string(), OCSPStatus::Good);
 
         // 第一次查询
         let _response1 = responder.query_status("12345").unwrap();
@@ -570,14 +572,18 @@ mod tests {
         let mut responder = OCSPResponder::default();
         responder.add_certificate("12345".to_string(), OCSPStatus::Good);
         responder.add_certificate(
-            "67890".to_string(), 
+            "67890".to_string(),
             OCSPStatus::Revoked {
                 reason: StatusRevocationReason::KeyCompromise,
                 revocation_time: OffsetDateTime::now_utc(),
-            }
+            },
         );
 
-        let serials = vec!["12345".to_string(), "67890".to_string(), "unknown".to_string()];
+        let serials = vec![
+            "12345".to_string(),
+            "67890".to_string(),
+            "unknown".to_string(),
+        ];
         let results = responder.batch_query_status(&serials);
 
         assert_eq!(results.len(), 3);
@@ -591,11 +597,11 @@ mod tests {
         let mut responder = OCSPResponder::default();
         responder.add_certificate("12345".to_string(), OCSPStatus::Good);
         responder.add_certificate(
-            "67890".to_string(), 
+            "67890".to_string(),
             OCSPStatus::Revoked {
                 reason: StatusRevocationReason::KeyCompromise,
                 revocation_time: OffsetDateTime::now_utc(),
-            }
+            },
         );
 
         // 导出
@@ -620,11 +626,17 @@ mod tests {
     fn test_ocsp_client_config_access() {
         let config = OCSPClientConfig::default();
         let client = OCSPClient::new(config.clone());
-        
+
         let client_config = client.get_config();
-        assert_eq!(client_config.default_timeout_seconds, config.default_timeout_seconds);
+        assert_eq!(
+            client_config.default_timeout_seconds,
+            config.default_timeout_seconds
+        );
         assert_eq!(client_config.max_retries, config.max_retries);
-        assert_eq!(client_config.retry_interval_seconds, config.retry_interval_seconds);
+        assert_eq!(
+            client_config.retry_interval_seconds,
+            config.retry_interval_seconds
+        );
         assert_eq!(client_config.verify_signature, config.verify_signature);
     }
 }

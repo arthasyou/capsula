@@ -1,11 +1,14 @@
 //! 本地文件系统存储实现
 
-use super::StorageProvider;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
+
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
-use std::io;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::{fs, io::AsyncWriteExt};
+
+use super::StorageProvider;
 
 /// 本地文件系统存储
 ///
@@ -92,17 +95,15 @@ impl StorageProvider for LocalStorage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_local_storage_store_and_retrieve() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = LocalStorage::new(
-            temp_dir.path(),
-            "http://localhost:8080/files".to_string(),
-        )
-        .unwrap();
+        let storage =
+            LocalStorage::new(temp_dir.path(), "http://localhost:8080/files".to_string()).unwrap();
 
         let key = "test/file.txt";
         let data = b"Hello, World!";
@@ -126,11 +127,8 @@ mod tests {
     #[tokio::test]
     async fn test_local_storage_nested_directories() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = LocalStorage::new(
-            temp_dir.path(),
-            "http://localhost:8080/files".to_string(),
-        )
-        .unwrap();
+        let storage =
+            LocalStorage::new(temp_dir.path(), "http://localhost:8080/files".to_string()).unwrap();
 
         let key = "a/b/c/d/file.txt";
         let data = b"Nested file";
@@ -149,11 +147,8 @@ mod tests {
     #[tokio::test]
     async fn test_local_storage_nonexistent_file() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = LocalStorage::new(
-            temp_dir.path(),
-            "http://localhost:8080/files".to_string(),
-        )
-        .unwrap();
+        let storage =
+            LocalStorage::new(temp_dir.path(), "http://localhost:8080/files".to_string()).unwrap();
 
         let key = "nonexistent.txt";
 

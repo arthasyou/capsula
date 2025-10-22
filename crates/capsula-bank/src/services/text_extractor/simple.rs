@@ -2,11 +2,12 @@
 //!
 //! 支持纯文本文件的提取
 
-use super::TextExtractor;
+use std::{io, path::Path};
+
 use async_trait::async_trait;
-use std::path::Path;
-use std::io;
 use tokio::fs;
+
+use super::TextExtractor;
 
 /// 简单文本提取器
 ///
@@ -58,9 +59,11 @@ impl TextExtractor for SimpleTextExtractor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Write;
+
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_extract_text_file() {

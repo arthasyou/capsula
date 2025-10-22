@@ -78,11 +78,11 @@ pub async fn force_initialize_default_data() -> Result<()> {
     println!("   初始化原子权限默认数据...");
     initialize_atomic_permissions().await?;
     println!("   ✅ 原子权限初始化成功");
-    
+
     println!("   初始化分子权限默认数据...");
     initialize_molecular_permissions().await?;
     println!("   ✅ 分子权限初始化成功");
-    
+
     Ok(())
 }
 

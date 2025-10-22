@@ -67,7 +67,9 @@ impl Chain {
     /// 创建新的证书链
     pub fn new(certificates: Vec<X509Certificate>) -> PkiResult<Self> {
         if certificates.is_empty() {
-            return Err(PkiError::ChainError("Certificate chain cannot be empty".to_string()));
+            return Err(PkiError::ChainError(
+                "Certificate chain cannot be empty".to_string(),
+            ));
         }
 
         let root_fingerprint = Self::calculate_fingerprint(&certificates[certificates.len() - 1]);
@@ -93,7 +95,7 @@ impl Chain {
         if self.certificates.len() <= 2 {
             &[]
         } else {
-            &self.certificates[1..self.certificates.len() - 1]
+            &self.certificates[1 .. self.certificates.len() - 1]
         }
     }
 
@@ -143,11 +145,18 @@ impl Chain {
         }
 
         // 验证证书链的连接性
-        for i in 0..self.certificates.len() - 1 {
-            if let Err(e) = self.validate_certificate_connection(&self.certificates[i], &self.certificates[i + 1]) {
+        for i in 0 .. self.certificates.len() - 1 {
+            if let Err(e) = self
+                .validate_certificate_connection(&self.certificates[i], &self.certificates[i + 1])
+            {
                 issues.push(ValidationIssue {
                     level: IssueLevel::Error,
-                    message: format!("Chain connection issue between cert {} and {}: {}", i, i + 1, e),
+                    message: format!(
+                        "Chain connection issue between cert {} and {}: {}",
+                        i,
+                        i + 1,
+                        e
+                    ),
                     certificate_index: Some(i),
                 });
             }
@@ -163,7 +172,9 @@ impl Chain {
             });
         }
 
-        let is_valid = !issues.iter().any(|issue| matches!(issue.level, IssueLevel::Critical | IssueLevel::Error));
+        let is_valid = !issues
+            .iter()
+            .any(|issue| matches!(issue.level, IssueLevel::Critical | IssueLevel::Error));
 
         ValidationResult {
             is_valid,
@@ -176,21 +187,23 @@ impl Chain {
     /// 导出为PEM格式
     pub fn to_pem(&self) -> PkiResult<String> {
         let mut pem_data = String::new();
-        
+
         for _cert in &self.certificates {
             // TODO: 实现证书的PEM导出
             pem_data.push_str("-----BEGIN CERTIFICATE-----\n");
             pem_data.push_str("TODO: Certificate PEM data\n");
             pem_data.push_str("-----END CERTIFICATE-----\n");
         }
-        
+
         Ok(pem_data)
     }
 
     /// 从PEM格式导入
     pub fn from_pem(_pem_data: &str) -> PkiResult<Self> {
         // TODO: 实现从PEM导入证书链
-        Err(PkiError::ParseError("PEM import not yet implemented".to_string()))
+        Err(PkiError::ParseError(
+            "PEM import not yet implemented".to_string(),
+        ))
     }
 
     /// 计算证书指纹
@@ -211,7 +224,11 @@ impl Chain {
     }
 
     /// 验证证书连接
-    fn validate_certificate_connection(&self, _child: &X509Certificate, _parent: &X509Certificate) -> PkiResult<()> {
+    fn validate_certificate_connection(
+        &self,
+        _child: &X509Certificate,
+        _parent: &X509Certificate,
+    ) -> PkiResult<()> {
         // TODO: 实现证书连接验证
         // - 验证子证书是由父证书签名的
         // - 检查主体和颁发者匹配
@@ -245,7 +262,8 @@ impl ChainBuilder {
     /// 添加信任的根证书
     pub fn add_trusted_root(&mut self, certificate: X509Certificate) {
         let fingerprint = Chain::calculate_fingerprint(&certificate);
-        self.trusted_roots.insert(fingerprint.clone(), certificate.clone());
+        self.trusted_roots
+            .insert(fingerprint.clone(), certificate.clone());
         self.certificate_pool.insert(fingerprint, certificate);
     }
 
@@ -258,7 +276,7 @@ impl ChainBuilder {
         loop {
             // 查找当前证书的签发者
             let issuer_cert = self.find_issuer(current_cert)?;
-            
+
             // 检查是否已经到达根证书
             if self.is_root_certificate(&issuer_cert) {
                 chain.push(issuer_cert);
@@ -267,7 +285,9 @@ impl ChainBuilder {
 
             // 检查链长度限制
             if chain.len() > 10 {
-                return Err(PkiError::ChainError("Certificate chain too long".to_string()));
+                return Err(PkiError::ChainError(
+                    "Certificate chain too long".to_string(),
+                ));
             }
 
             chain.push(issuer_cert.clone());
@@ -300,7 +320,9 @@ impl ChainBuilder {
         // TODO: 实现签发者查找逻辑
         // - 根据证书的颁发者信息在证书池中查找
         // - 验证密钥标识符匹配
-        Err(PkiError::ChainError("Issuer certificate not found".to_string()))
+        Err(PkiError::ChainError(
+            "Issuer certificate not found".to_string(),
+        ))
     }
 
     /// 检查是否为根证书
@@ -346,7 +368,7 @@ mod tests {
             state: None,
             locality: None,
         };
-        
+
         let cert_info = crate::ra::cert::CertificateInfo {
             subject: subject.clone(),
             validity_seconds: 86400, // 1 day
@@ -354,7 +376,7 @@ mod tests {
             is_ca: false,
             key_usage: vec!["digitalSignature".to_string()],
         };
-        
+
         let keypair = capsula_key::Curve25519::generate().unwrap();
         crate::ra::cert::create_self_signed_certificate(&keypair, subject, cert_info).unwrap()
     }
@@ -370,8 +392,18 @@ mod tests {
 
         let chain = chain.unwrap();
         assert_eq!(chain.length(), 2);
-        assert_eq!(chain.end_entity_certificate().subject().unwrap().common_name, "Test Cert 1");
-        assert_eq!(chain.root_certificate().subject().unwrap().common_name, "Test Cert 2");
+        assert_eq!(
+            chain
+                .end_entity_certificate()
+                .subject()
+                .unwrap()
+                .common_name,
+            "Test Cert 1"
+        );
+        assert_eq!(
+            chain.root_certificate().subject().unwrap().common_name,
+            "Test Cert 2"
+        );
     }
 
     #[test]
@@ -384,7 +416,7 @@ mod tests {
     fn test_chain_validation() {
         let cert = create_test_certificate("Test Cert");
         let chain = Chain::new(vec![cert]).unwrap();
-        
+
         let result = chain.validate();
         assert_eq!(result.chain_length, 1);
         // 基本验证应该通过（虽然实际验证逻辑还未完全实现）
@@ -394,7 +426,7 @@ mod tests {
     fn test_chain_builder() {
         let mut builder = ChainBuilder::new();
         let root_cert = create_test_certificate("Root CA");
-        
+
         builder.add_trusted_root(root_cert.clone());
         assert_eq!(builder.trusted_roots.len(), 1);
         assert_eq!(builder.certificate_pool.len(), 1);
@@ -409,9 +441,12 @@ mod tests {
 
         let chain = Chain::new(certificates).unwrap();
         assert_eq!(chain.length(), 3);
-        
+
         let intermediates = chain.intermediate_certificates();
         assert_eq!(intermediates.len(), 1);
-        assert_eq!(intermediates[0].subject().unwrap().common_name, "Intermediate CA");
+        assert_eq!(
+            intermediates[0].subject().unwrap().common_name,
+            "Intermediate CA"
+        );
     }
 }

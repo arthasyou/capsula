@@ -6,9 +6,11 @@
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Error, Result};
-use crate::hash::base64;
-use crate::symmetric::{aes::Aes, chacha::ChaCha};
+use crate::{
+    error::{Error, Result},
+    hash::base64,
+    symmetric::{aes::Aes, chacha::ChaCha},
+};
 
 /// AEAD algorithm selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,18 +87,16 @@ impl AeadCipher {
     /// Encrypted data with 12-byte nonce prepended
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         match self.algorithm {
-            AeadAlgorithm::Aes256Gcm => {
-                self.aes_cipher
-                    .as_ref()
-                    .ok_or_else(|| Error::Other("AES cipher not initialized".to_string()))?
-                    .encrypt(plaintext)
-            }
-            AeadAlgorithm::ChaCha20Poly1305 => {
-                self.chacha_cipher
-                    .as_ref()
-                    .ok_or_else(|| Error::Other("ChaCha cipher not initialized".to_string()))?
-                    .encrypt(plaintext)
-            }
+            AeadAlgorithm::Aes256Gcm => self
+                .aes_cipher
+                .as_ref()
+                .ok_or_else(|| Error::Other("AES cipher not initialized".to_string()))?
+                .encrypt(plaintext),
+            AeadAlgorithm::ChaCha20Poly1305 => self
+                .chacha_cipher
+                .as_ref()
+                .ok_or_else(|| Error::Other("ChaCha cipher not initialized".to_string()))?
+                .encrypt(plaintext),
         }
     }
 
@@ -116,11 +116,12 @@ impl AeadCipher {
         aad: Option<&[u8]>,
     ) -> Result<String> {
         // For now, we simulate AAD support by encrypting with external nonce
-        // This is a compatibility bridge - real AAD support would need changes to AES/ChaCha modules
+        // This is a compatibility bridge - real AAD support would need changes to AES/ChaCha
+        // modules
         let mut combined_data = Vec::new();
         combined_data.extend_from_slice(nonce);
         combined_data.extend_from_slice(plaintext);
-        
+
         if let Some(aad_data) = aad {
             // For compatibility, we can append AAD to the plaintext
             // In production, this should be true AEAD with separate AAD processing
@@ -140,18 +141,16 @@ impl AeadCipher {
     /// Decrypted plaintext
     pub fn decrypt(&self, encrypted_data: &[u8]) -> Result<Vec<u8>> {
         match self.algorithm {
-            AeadAlgorithm::Aes256Gcm => {
-                self.aes_cipher
-                    .as_ref()
-                    .ok_or_else(|| Error::Other("AES cipher not initialized".to_string()))?
-                    .decrypt(encrypted_data)
-            }
-            AeadAlgorithm::ChaCha20Poly1305 => {
-                self.chacha_cipher
-                    .as_ref()
-                    .ok_or_else(|| Error::Other("ChaCha cipher not initialized".to_string()))?
-                    .decrypt(encrypted_data)
-            }
+            AeadAlgorithm::Aes256Gcm => self
+                .aes_cipher
+                .as_ref()
+                .ok_or_else(|| Error::Other("AES cipher not initialized".to_string()))?
+                .decrypt(encrypted_data),
+            AeadAlgorithm::ChaCha20Poly1305 => self
+                .chacha_cipher
+                .as_ref()
+                .ok_or_else(|| Error::Other("ChaCha cipher not initialized".to_string()))?
+                .decrypt(encrypted_data),
         }
     }
 
@@ -179,26 +178,28 @@ impl AeadCipher {
         }
 
         // Verify nonce matches
-        let extracted_nonce = &decrypted[0..12];
+        let extracted_nonce = &decrypted[0 .. 12];
         if extracted_nonce != nonce {
             return Err(Error::Other("Nonce mismatch during decryption".to_string()));
         }
 
-        let mut plaintext = decrypted[12..].to_vec();
-        
+        let mut plaintext = decrypted[12 ..].to_vec();
+
         // If AAD was used, remove it from the end
         if let Some(aad_data) = aad {
             if plaintext.len() < aad_data.len() {
-                return Err(Error::Other("Plaintext too short to contain AAD".to_string()));
+                return Err(Error::Other(
+                    "Plaintext too short to contain AAD".to_string(),
+                ));
             }
-            
+
             let aad_start = plaintext.len() - aad_data.len();
-            let extracted_aad = &plaintext[aad_start..];
-            
+            let extracted_aad = &plaintext[aad_start ..];
+
             if extracted_aad != aad_data {
                 return Err(Error::Other("AAD mismatch during decryption".to_string()));
             }
-            
+
             plaintext.truncate(aad_start);
         }
 
@@ -234,7 +235,8 @@ pub fn generate_id(prefix: &str) -> String {
 pub fn detect_algorithm(encrypted_data: &[u8]) -> Option<AeadAlgorithm> {
     // This is a simple heuristic - in practice you might want to embed algorithm info
     // For now, we default to AES-256-GCM for compatibility
-    if encrypted_data.len() >= 28 {  // 12 bytes nonce + 16 bytes min ciphertext
+    if encrypted_data.len() >= 28 {
+        // 12 bytes nonce + 16 bytes min ciphertext
         Some(AeadAlgorithm::Aes256Gcm)
     } else {
         None
@@ -242,30 +244,25 @@ pub fn detect_algorithm(encrypted_data: &[u8]) -> Option<AeadAlgorithm> {
 }
 
 /// Convenience function to encrypt with 4 parameters (backward compatibility)
-/// 
+///
 /// # Arguments
 /// * `plaintext` - Data to encrypt
-/// * `key` - 32-byte encryption key  
+/// * `key` - 32-byte encryption key
 /// * `nonce` - 12-byte nonce for encryption
 /// * `aad` - Additional authenticated data
 ///
 /// # Returns
 /// Base64-encoded ciphertext with authentication tag
-pub fn encrypt_aead(
-    plaintext: &[u8],
-    key: &[u8], 
-    nonce: &[u8; 12],
-    aad: &[u8]
-) -> Result<String> {
+pub fn encrypt_aead(plaintext: &[u8], key: &[u8], nonce: &[u8; 12], aad: &[u8]) -> Result<String> {
     // Validate key length
     if key.len() != 32 {
         return Err(Error::Other("Key must be exactly 32 bytes".to_string()));
     }
     let key_array: &[u8; 32] = key.try_into().unwrap();
-    
+
     // Use default algorithm (AES-256-GCM)
     let cipher = AeadCipher::new_default(key_array)?;
-    
+
     match cipher.algorithm {
         AeadAlgorithm::Aes256Gcm => {
             let aes_cipher = cipher.aes_cipher.as_ref().unwrap();
@@ -282,16 +279,16 @@ pub fn encrypt_aead(
 
 /// Convenience function to encrypt with algorithm selection
 pub fn encrypt_aead_with_algorithm(
-    plaintext: &[u8], 
-    key: &[u8], 
-    algorithm: AeadAlgorithm
+    plaintext: &[u8],
+    key: &[u8],
+    algorithm: AeadAlgorithm,
 ) -> Result<Vec<u8>> {
     // Validate key length
     if key.len() != 32 {
         return Err(Error::Other("Key must be exactly 32 bytes".to_string()));
     }
     let key_array: &[u8; 32] = key.try_into().unwrap();
-    
+
     let cipher = AeadCipher::new(key_array, algorithm)?;
     cipher.encrypt(plaintext)
 }
@@ -309,7 +306,7 @@ pub fn encrypt_aead_with_nonce(
         return Err(Error::Other("Key must be exactly 32 bytes".to_string()));
     }
     let key_array: &[u8; 32] = key.try_into().unwrap();
-    
+
     let algorithm = algorithm.unwrap_or_default();
     let cipher = AeadCipher::new(key_array, algorithm)?;
     cipher.encrypt_with_nonce(plaintext, nonce, aad)
@@ -329,19 +326,19 @@ pub fn decrypt_aead(
     ciphertext_b64: &str,
     key: &[u8],
     nonce: &[u8; 12],
-    aad: &[u8]
+    aad: &[u8],
 ) -> Result<Vec<u8>> {
     // Validate key length
     if key.len() != 32 {
         return Err(Error::Other("Key must be exactly 32 bytes".to_string()));
     }
     let key_array: &[u8; 32] = key.try_into().unwrap();
-    
+
     // Use default algorithm (AES-256-GCM)
     let cipher = AeadCipher::new_default(key_array)?;
-    
+
     let encrypted_data = base64::decode(ciphertext_b64)?;
-    
+
     match cipher.algorithm {
         AeadAlgorithm::Aes256Gcm => {
             let aes_cipher = cipher.aes_cipher.as_ref().unwrap();
@@ -368,15 +365,17 @@ pub fn decrypt_aead_with_algorithm(key: &[u8], encrypted_data: &[u8]) -> Result<
             return Ok(decrypted);
         }
     }
-    
+
     // If AES fails, try ChaCha
     if let Ok(chacha_cipher) = AeadCipher::new(key_array, AeadAlgorithm::ChaCha20Poly1305) {
         if let Ok(decrypted) = chacha_cipher.decrypt(encrypted_data) {
             return Ok(decrypted);
         }
     }
-    
-    Err(Error::Other("Failed to decrypt with any supported algorithm".to_string()))
+
+    Err(Error::Other(
+        "Failed to decrypt with any supported algorithm".to_string(),
+    ))
 }
 
 /// Convenience function to decrypt with external nonce and AAD
@@ -392,7 +391,7 @@ pub fn decrypt_aead_with_nonce(
         return Err(Error::Other("Key must be exactly 32 bytes".to_string()));
     }
     let key_array: &[u8; 32] = key.try_into().unwrap();
-    
+
     let algorithm = algorithm.unwrap_or_default();
     let cipher = AeadCipher::new(key_array, algorithm)?;
     cipher.decrypt_with_nonce(ciphertext_b64, nonce, aad)
@@ -489,7 +488,7 @@ mod tests {
         let encrypted = encrypt_aead(plaintext, &key, &nonce, aad)?;
         let decrypted = decrypt_aead(&encrypted, &key, &nonce, aad)?;
         assert_eq!(decrypted, plaintext);
-        
+
         // Test with Vec<u8> key (new flexibility)
         let key_vec: Vec<u8> = key.to_vec();
         let encrypted_vec = encrypt_aead(plaintext, &key_vec, &nonce, aad)?;
@@ -501,7 +500,8 @@ mod tests {
         let aes_decrypted = decrypt_aead_with_algorithm(&key, &aes_encrypted)?;
         assert_eq!(aes_decrypted, plaintext);
 
-        let chacha_encrypted = encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::ChaCha20Poly1305)?;
+        let chacha_encrypted =
+            encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::ChaCha20Poly1305)?;
         let chacha_decrypted = decrypt_aead_with_algorithm(&key, &chacha_encrypted)?;
         assert_eq!(chacha_decrypted, plaintext);
 
@@ -515,7 +515,7 @@ mod tests {
 
         // Create encrypted data
         let encrypted = encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::Aes256Gcm)?;
-        
+
         // Test detection
         let detected = detect_algorithm(&encrypted);
         assert!(detected.is_some());
@@ -547,9 +547,10 @@ mod tests {
 
         // Encrypt with AES
         let aes_encrypted = encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::Aes256Gcm)?;
-        
+
         // Encrypt with ChaCha
-        let chacha_encrypted = encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::ChaCha20Poly1305)?;
+        let chacha_encrypted =
+            encrypt_aead_with_algorithm(plaintext, &key, AeadAlgorithm::ChaCha20Poly1305)?;
 
         // They should produce different ciphertexts
         assert_ne!(aes_encrypted, chacha_encrypted);
@@ -557,7 +558,7 @@ mod tests {
         // But both should decrypt correctly with their respective algorithms
         let aes_decrypted = decrypt_aead_with_algorithm(&key, &aes_encrypted)?;
         let chacha_decrypted = decrypt_aead_with_algorithm(&key, &chacha_encrypted)?;
-        
+
         assert_eq!(aes_decrypted, plaintext);
         assert_eq!(chacha_decrypted, plaintext);
 

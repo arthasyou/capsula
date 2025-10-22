@@ -1,7 +1,10 @@
 use axum::{routing::get, Router};
 use utoipa::OpenApi;
 
-use crate::{handlers::health::{ca_status, health}, state::AppState};
+use crate::{
+    handlers::health::{ca_status, health},
+    state::AppState,
+};
 
 #[derive(OpenApi)]
 #[openapi(

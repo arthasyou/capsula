@@ -2,16 +2,16 @@
 //!
 //! 提供证书续期功能，包括续期策略、续期请求处理和续期结果管理
 
-use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 use std::collections::HashMap;
 
-use crate::{
-    error::{PkiError, Result as PkiResult},
-    ca::Manager as CAManager,
-};
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 use super::policy::RenewalPolicy;
+use crate::{
+    ca::Manager as CAManager,
+    error::{PkiError, Result as PkiResult},
+};
 
 /// 续期管理器
 pub struct RenewalManager {
@@ -152,7 +152,11 @@ impl RenewalManager {
     }
 
     /// 获取续期建议
-    pub fn get_renewal_suggestion(&self, _certificate_serial: &str, days_until_expiry: u32) -> RenewalSuggestion {
+    pub fn get_renewal_suggestion(
+        &self,
+        _certificate_serial: &str,
+        days_until_expiry: u32,
+    ) -> RenewalSuggestion {
         if days_until_expiry <= self.policy.advance_notification_days {
             if days_until_expiry <= 7 {
                 RenewalSuggestion::Urgent {
@@ -168,8 +172,10 @@ impl RenewalManager {
         } else {
             RenewalSuggestion::NotNeeded {
                 days_left: days_until_expiry,
-                next_check_date: OffsetDateTime::now_utc() + 
-                    time::Duration::days((days_until_expiry - self.policy.advance_notification_days) as i64),
+                next_check_date: OffsetDateTime::now_utc()
+                    + time::Duration::days(
+                        (days_until_expiry - self.policy.advance_notification_days) as i64,
+                    ),
             }
         }
     }
@@ -200,17 +206,24 @@ impl RenewalManager {
     /// 验证续期请求
     fn validate_renewal_request(&self, request: &RenewalRequest) -> PkiResult<()> {
         if request.certificate_serial.is_empty() {
-            return Err(PkiError::LifecycleError("Certificate serial number is required".to_string()));
+            return Err(PkiError::LifecycleError(
+                "Certificate serial number is required".to_string(),
+            ));
         }
 
         if request.requested_by.is_empty() {
-            return Err(PkiError::LifecycleError("Requester information is required".to_string()));
+            return Err(PkiError::LifecycleError(
+                "Requester information is required".to_string(),
+            ));
         }
 
         // 验证新的有效期
         if let Some(validity_days) = request.new_validity_days {
-            if validity_days == 0 || validity_days > 3650 { // 最长10年
-                return Err(PkiError::LifecycleError("Invalid validity period".to_string()));
+            if validity_days == 0 || validity_days > 3650 {
+                // 最长10年
+                return Err(PkiError::LifecycleError(
+                    "Invalid validity period".to_string(),
+                ));
             }
         }
 
@@ -223,9 +236,10 @@ impl RenewalManager {
         if let Some(max_count) = self.policy.max_renewal_count {
             let current_count = self.get_renewal_count(&request.certificate_serial);
             if current_count >= max_count {
-                return Err(PkiError::LifecycleError(
-                    format!("Certificate has exceeded maximum renewal count: {}/{}", current_count, max_count)
-                ));
+                return Err(PkiError::LifecycleError(format!(
+                    "Certificate has exceeded maximum renewal count: {}/{}",
+                    current_count, max_count
+                )));
             }
         }
 
@@ -249,11 +263,17 @@ impl RenewalManager {
         // 3. 保持相同的公钥和主体信息
         // 4. 更新有效期
 
-        let new_validity_days = request.new_validity_days.unwrap_or(self.policy.renewal_extension_days);
-        let new_expiry_date = OffsetDateTime::now_utc() + time::Duration::days(new_validity_days as i64);
-        
+        let new_validity_days = request
+            .new_validity_days
+            .unwrap_or(self.policy.renewal_extension_days);
+        let new_expiry_date =
+            OffsetDateTime::now_utc() + time::Duration::days(new_validity_days as i64);
+
         // 生成新的序列号
-        let new_serial = format!("RENEWED-{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase());
+        let new_serial = format!(
+            "RENEWED-{}",
+            uuid::Uuid::new_v4().to_string()[.. 8].to_uppercase()
+        );
 
         let renewal_result = RenewalResult {
             original_serial: request.certificate_serial.clone(),
@@ -270,7 +290,11 @@ impl RenewalManager {
     }
 
     /// 记录续期历史
-    fn record_renewal(&mut self, request: &RenewalRequest, result: &RenewalResult) -> PkiResult<()> {
+    fn record_renewal(
+        &mut self,
+        request: &RenewalRequest,
+        result: &RenewalResult,
+    ) -> PkiResult<()> {
         let record = RenewalRecord {
             request: request.clone(),
             result: result.clone(),
@@ -321,7 +345,7 @@ pub enum RenewalSuggestion {
 impl Default for RenewalManager {
     fn default() -> Self {
         use super::policy::RenewalPolicy;
-        
+
         Self::new(RenewalPolicy {
             advance_notification_days: 30,
             allow_expired_renewal: false,
@@ -347,7 +371,7 @@ mod tests {
             renewal_extension_days: 365,
             require_identity_revalidation: false,
         };
-        
+
         let manager = RenewalManager::new(policy);
         assert_eq!(manager.policy.advance_notification_days, 30);
         assert!(manager.policy.allow_expired_renewal);
@@ -356,7 +380,7 @@ mod tests {
     #[test]
     fn test_renewal_request_validation() {
         let manager = RenewalManager::default();
-        
+
         // 有效请求
         let valid_request = RenewalRequest {
             certificate_serial: "CERT-12345".to_string(),
@@ -366,9 +390,9 @@ mod tests {
             force_renewal: false,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
+
         assert!(manager.validate_renewal_request(&valid_request).is_ok());
-        
+
         // 无效请求 - 空序列号
         let invalid_request = RenewalRequest {
             certificate_serial: "".to_string(),
@@ -378,22 +402,22 @@ mod tests {
             force_renewal: false,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
+
         assert!(manager.validate_renewal_request(&invalid_request).is_err());
     }
 
     #[test]
     fn test_renewal_suggestions() {
         let manager = RenewalManager::default();
-        
+
         // 紧急续期建议
         let urgent = manager.get_renewal_suggestion("CERT-123", 5);
         assert!(matches!(urgent, RenewalSuggestion::Urgent { .. }));
-        
+
         // 推荐续期
         let recommended = manager.get_renewal_suggestion("CERT-123", 20);
         assert!(matches!(recommended, RenewalSuggestion::Recommended { .. }));
-        
+
         // 暂不需要续期
         let not_needed = manager.get_renewal_suggestion("CERT-123", 100);
         assert!(matches!(not_needed, RenewalSuggestion::NotNeeded { .. }));
@@ -403,10 +427,10 @@ mod tests {
     fn test_renewal_count_tracking() {
         let mut manager = RenewalManager::default();
         let serial = "CERT-12345";
-        
+
         // 初始续期次数应为0
         assert_eq!(manager.get_renewal_count(serial), 0);
-        
+
         // 模拟续期记录
         let request = RenewalRequest {
             certificate_serial: serial.to_string(),
@@ -416,7 +440,7 @@ mod tests {
             force_renewal: false,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
+
         let result = RenewalResult {
             original_serial: serial.to_string(),
             new_serial: "RENEWED-12345".to_string(),
@@ -427,12 +451,12 @@ mod tests {
             renewed_at: OffsetDateTime::now_utc(),
             status: RenewalStatus::Success,
         };
-        
+
         manager.record_renewal(&request, &result).unwrap();
-        
+
         // 续期次数应为1
         assert_eq!(manager.get_renewal_count(serial), 1);
-        
+
         // 续期历史应包含1条记录
         let history = manager.get_renewal_history(serial);
         assert_eq!(history.len(), 1);
@@ -448,10 +472,10 @@ mod tests {
             renewal_extension_days: 365,
             require_identity_revalidation: false,
         };
-        
+
         let manager = RenewalManager::new(policy);
         let serial = "CERT-12345";
-        
+
         // 初始应该可以续期
         assert!(manager.can_renew_certificate(serial).unwrap());
     }

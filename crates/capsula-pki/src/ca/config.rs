@@ -66,8 +66,8 @@ impl Default for Config {
             default_cert_validity_days: 365, // 1年
             max_path_length: Some(3),        // 允许3级证书链
             key_algorithm: KeyAlgorithm::default(),
-            crl_update_interval_hours: 24,   // 每天更新CRL
-            crl_next_update_hours: 168,      // CRL有效期1周
+            crl_update_interval_hours: 24, // 每天更新CRL
+            crl_next_update_hours: 168,    // CRL有效期1周
         }
     }
 }
@@ -99,9 +99,9 @@ impl Config {
         Self {
             name: name.to_string(),
             organization: organization.to_string(),
-            validity_days: 730,              // 2年
-            default_cert_validity_days: 90,  // 3个月
-            max_path_length: Some(0),        // 不能再创建下级CA
+            validity_days: 730,             // 2年
+            default_cert_validity_days: 90, // 3个月
+            max_path_length: Some(0),       // 不能再创建下级CA
             ..Default::default()
         }
     }
@@ -267,17 +267,17 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = Config::default();
-        
+
         // 测试空名称
         config.name = String::new();
         assert!(config.validate().is_err());
-        
+
         // 测试有效期问题
         config.name = "Test CA".to_string();
         config.validity_days = 30;
         config.default_cert_validity_days = 365;
         assert!(config.validate().is_err());
-        
+
         // 测试RSA密钥大小
         config.validity_days = 365;
         config.default_cert_validity_days = 30;

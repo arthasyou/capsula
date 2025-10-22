@@ -1,9 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding};
-use rsa::{
-    traits::PublicKeyParts,
-    RsaPrivateKey, RsaPublicKey,
-};
+use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
@@ -76,7 +73,10 @@ impl Rsa {
 
     /// Export public key to SPKI PEM format
     pub fn to_spki_pem(&self) -> Result<String> {
-        let pem = self.inner.to_public_key().to_public_key_pem(LineEnding::LF)?;
+        let pem = self
+            .inner
+            .to_public_key()
+            .to_public_key_pem(LineEnding::LF)?;
         Ok(pem)
     }
 
@@ -116,12 +116,12 @@ impl Rsa {
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>> {
         let mut rng = rand::thread_rng();
         let hashed = Sha256::digest(message);
-        let signature = self.inner
+        let signature = self
+            .inner
             .sign_with_rng(&mut rng, rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed)
             .map_err(|e| Error::Other(format!("RSA signing failed: {}", e)))?;
         Ok(signature)
     }
-
 
     /// Encrypt data using own public key with PKCS#1 v1.5 padding
     /// Use this when you want to encrypt data that only this key can decrypt
@@ -150,10 +150,12 @@ impl Rsa {
 pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {
     // Parse RSA public key from SPKI DER
     let public_key = public_key_from_spki_der(spki_der)?;
-    
+
     // Verify using PKCS#1 v1.5 with SHA-256
     let hashed = Sha256::digest(message);
-    Ok(public_key.verify(rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed, signature).is_ok())
+    Ok(public_key
+        .verify(rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed, signature)
+        .is_ok())
 }
 
 /// Import public key from SPKI DER format
@@ -183,7 +185,7 @@ mod tests {
     fn test_key_generation() {
         let key = Rsa::generate_2048().unwrap();
         assert_eq!(key.size(), 2048);
-        
+
         let key = Rsa::generate_3072().unwrap();
         assert_eq!(key.size(), 3072);
     }
@@ -192,9 +194,9 @@ mod tests {
     fn test_sign_verify() {
         let key = Rsa::generate_2048().unwrap();
         let message = b"Hello, RSA!";
-        
+
         let signature = key.sign(message).unwrap();
-        
+
         let spki_der = key.to_spki_der().unwrap();
         assert!(verify_with_spki_der(&spki_der, message, &signature).unwrap());
     }
@@ -228,14 +230,14 @@ mod tests {
     #[test]
     fn test_pem_export_import() {
         let key = Rsa::generate_2048().unwrap();
-        
+
         // Test private key PEM
         let pem = key.to_pkcs8_pem().unwrap();
         assert!(pem.starts_with("-----BEGIN PRIVATE KEY-----"));
-        
+
         let imported = Rsa::from_pkcs8_pem(&pem).unwrap();
         assert_eq!(key.size(), imported.size());
-        
+
         // Test public key PEM
         let public_pem = key.to_spki_pem().unwrap();
         assert!(public_pem.starts_with("-----BEGIN PUBLIC KEY-----"));
@@ -244,12 +246,12 @@ mod tests {
     #[test]
     fn test_der_export_import() {
         let key = Rsa::generate_2048().unwrap();
-        
+
         // Test private key DER
         let der = key.to_pkcs8_der().unwrap();
         let imported = Rsa::from_pkcs8_der(&der).unwrap();
         assert_eq!(key.size(), imported.size());
-        
+
         // Test public key DER
         let public_der = key.to_spki_der().unwrap();
         let public_key = public_key_from_spki_der(&public_der).unwrap();
@@ -261,7 +263,7 @@ mod tests {
     fn test_jwk_export() {
         let key = Rsa::generate_2048().unwrap();
         let jwk = key.to_jwk().unwrap();
-        
+
         // Parse JSON to verify structure
         let parsed: serde_json::Value = serde_json::from_str(&jwk).unwrap();
         assert_eq!(parsed["kty"], "RSA");
@@ -275,7 +277,7 @@ mod tests {
         let key = Rsa::generate_2048().unwrap();
         let fingerprint = key.spki_sha256_fingerprint().unwrap();
         assert_eq!(fingerprint.len(), 32);
-        
+
         // Fingerprint should be deterministic
         let fingerprint2 = key.spki_sha256_fingerprint().unwrap();
         assert_eq!(fingerprint, fingerprint2);

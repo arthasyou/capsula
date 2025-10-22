@@ -2,8 +2,9 @@
 //!
 //! 提供统一的存储接口，支持本地文件系统、S3等多种存储后端
 
-use async_trait::async_trait;
 use std::io;
+
+use async_trait::async_trait;
 
 pub mod local;
 

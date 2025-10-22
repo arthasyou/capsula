@@ -1,7 +1,7 @@
 // HSM (Hardware Security Module) 存储实现
-// 
+//
 // 此模块提供基于PKCS#11标准的硬件安全模块密钥存储支持
-// 
+//
 // HSM的主要优势：
 // - 硬件级密钥保护，密钥无法导出
 // - 高安全性的密钥生成和密码运算
@@ -25,8 +25,8 @@
 // - 需要适当的用户权限和PIN码
 // - 某些操作可能需要管理员权限
 
+use super::{KeyHandle, KeyMetadata, KeyStore};
 use crate::error::Result;
-use super::{KeyMetadata, KeyStore, KeyHandle};
 /// HSM密钥存储实现
 pub struct HsmKeyStore {
     // TODO: 实现PKCS#11接口
@@ -37,7 +37,7 @@ pub struct HsmKeyStore {
 
 impl HsmKeyStore {
     /// 创建新的HSM密钥存储
-    /// 
+    ///
     /// # 参数
     /// - module_path: PKCS#11模块库路径
     /// - slot: HSM插槽号
@@ -47,7 +47,7 @@ impl HsmKeyStore {
         // - 加载PKCS#11库
         // - 初始化会话
         // - 用户登录（如果提供PIN）
-        
+
         Ok(HsmKeyStore {
             // module_path,
             // slot,

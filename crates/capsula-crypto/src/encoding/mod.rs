@@ -5,4 +5,6 @@
 
 pub mod spki;
 
-pub use spki::{encrypt_dek_with_algorithm, decrypt_dek_with_algorithm, parse_algorithm_from_spki, Algorithm};
+pub use spki::{
+    decrypt_dek_with_algorithm, encrypt_dek_with_algorithm, parse_algorithm_from_spki, Algorithm,
+};

@@ -1,7 +1,8 @@
 //! 胶囊创建请求模型
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// 加密信息

@@ -2,9 +2,10 @@
 //!
 //! 提供 RAII 模式的临时文件管理，确保文件在使用后自动清理
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::io;
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 /// 临时文件守卫，使用 RAII 模式自动清理文件
 ///
@@ -98,9 +99,9 @@ impl AsRef<Path> for TempFileGuard {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, io::Write};
+
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
 
     #[test]
     fn test_temp_file_auto_cleanup() {

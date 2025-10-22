@@ -1,7 +1,6 @@
 //! Memory management and utility functions
 
-use std::ffi::CString;
-use std::os::raw::c_char;
+use std::{ffi::CString, os::raw::c_char};
 
 use crate::types::CapsulaResult;
 
@@ -15,16 +14,20 @@ pub extern "C" fn capsula_free_result(result: *mut CapsulaResult) {
     if result.is_null() {
         return;
     }
-    
+
     unsafe {
         let result = Box::from_raw(result);
-        
+
         // Free data if present
         if !result.data.is_null() && result.data_len > 0 {
-            let data = Vec::from_raw_parts(result.data, result.data_len as usize, result.data_len as usize);
+            let data = Vec::from_raw_parts(
+                result.data,
+                result.data_len as usize,
+                result.data_len as usize,
+            );
             drop(data);
         }
-        
+
         // Free error message if present
         if !result.error_message.is_null() {
             let _ = CString::from_raw(result.error_message);

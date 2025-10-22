@@ -12,12 +12,16 @@ static SYSTEM_RSA_KEY: OnceLock<RsaKey> = OnceLock::new();
 /// If initialization fails, the application should panic and not start
 pub fn init_system_key(private_key_path: &str) -> Result<()> {
     // Read the PEM file content
-    let pem_content = std::fs::read_to_string(private_key_path)
-        .map_err(|e| AppError::IoError(e))?;
+    let pem_content =
+        std::fs::read_to_string(private_key_path).map_err(|e| AppError::IoError(e))?;
 
     // Parse the RSA key from PEM
-    let key = RsaKey::from_pkcs8_pem(&pem_content)
-        .map_err(|e| AppError::Internal(format!("Failed to load system private key from {}: {}", private_key_path, e)))?;
+    let key = RsaKey::from_pkcs8_pem(&pem_content).map_err(|e| {
+        AppError::Internal(format!(
+            "Failed to load system private key from {}: {}",
+            private_key_path, e
+        ))
+    })?;
 
     // Store the key in the static holder
     SYSTEM_RSA_KEY
@@ -34,7 +38,8 @@ pub fn init_system_key(private_key_path: &str) -> Result<()> {
 /// This should never happen in production if init_system_key() is called in main()
 #[inline]
 pub fn get_system_key() -> &'static RsaKey {
-    SYSTEM_RSA_KEY
-        .get()
-        .expect("System RSA key not initialized. init_system_key() must be called in main() before starting the server.")
+    SYSTEM_RSA_KEY.get().expect(
+        "System RSA key not initialized. init_system_key() must be called in main() before \
+         starting the server.",
+    )
 }

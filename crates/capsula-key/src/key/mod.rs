@@ -94,7 +94,7 @@ pub trait KeyAgree {
 /// # 示例
 ///
 /// ```no_run
-/// use capsula_key::{RsaKey, KeyEncDec};
+/// use capsula_key::{KeyEncDec, RsaKey};
 ///
 /// let bank_key = RsaKey::generate_2048().unwrap();
 ///

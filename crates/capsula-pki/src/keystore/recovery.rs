@@ -1,7 +1,8 @@
 //! 密钥恢复模块
 
-use crate::error::Result;
 use capsula_key::Key;
+
+use crate::error::Result;
 
 /// 密钥恢复器
 pub struct KeyRecovery;

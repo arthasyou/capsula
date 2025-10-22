@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, FixedOffset};
 use capsula_core::CapsuleContent;
+use chrono::{DateTime, FixedOffset};
 use model_gateway_rs::{
     model::llm::{ChatMessage, LlmInput, LlmOutput},
     traits::ModelClient,
@@ -79,7 +79,8 @@ where
         .unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string());
 
     let user_prompt = format!(
-        "以下是多个 1 阶数据胶囊的综合信息，请基于这些内容给出中文总结，强调异常指标、整体风险与建议：\n```json\n{}\n```",
+        "以下是多个 1 阶数据胶囊的综合信息，请基于这些内容给出中文总结，强调异常指标、\
+         整体风险与建议：\n```json\n{}\n```",
         dataset_json
     );
 
@@ -106,8 +107,7 @@ where
     let llm_summary: Value = serde_json::from_str(raw_summary).map_err(|e| {
         AppError::Internal(format!(
             "LLM response is not valid JSON: {}. Raw output: {}",
-            e,
-            raw_summary
+            e, raw_summary
         ))
     })?;
 
@@ -345,7 +345,10 @@ fn collect_abnormal_indicator_details(bnf: &Value) -> Vec<Value> {
 
             if let Some(items) = category.get("items").and_then(|v| v.as_array()) {
                 for item in items {
-                    let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let status = item
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
                     if status.eq_ignore_ascii_case("normal") || status.eq_ignore_ascii_case("ok") {
                         continue;
                     }

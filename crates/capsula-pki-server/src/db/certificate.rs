@@ -24,7 +24,7 @@ impl CertificateService {
             .query("REMOVE TABLE IF EXISTS certificates;")
             .await
             .map_err(|e| AppError::DbError(e))?;
-        
+
         let _result = self
             .db
             .query(
@@ -120,8 +120,10 @@ impl CertificateService {
         let limit = query.limit.unwrap_or(10);
         let offset = (page - 1) * limit;
 
-        let user_id = query.user_id.as_ref().ok_or_else(|| 
-            AppError::BadRequest("user_id is required".to_string()))?;
+        let user_id = query
+            .user_id
+            .as_ref()
+            .ok_or_else(|| AppError::BadRequest("user_id is required".to_string()))?;
         let mut where_clause = format!("user_id = '{}'", user_id);
         if let Some(status) = &query.status {
             let status_str = match status {
@@ -138,22 +140,26 @@ impl CertificateService {
             .db
             .query(&cert_query)
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to query certificates for count: {}", e)))?
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to query certificates for count: {}", e))
+            })?
             .take(0)
-            .map_err(|e| AppError::Internal(format!("Failed to parse certificates for count: {}", e)))?;
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to parse certificates for count: {}", e))
+            })?;
 
         let total_count = all_certificates.len() as u32;
 
-        // Use already queried certificates and apply pagination  
+        // Use already queried certificates and apply pagination
         let mut sorted_certs = all_certificates;
         // Sort by created_at DESC (timestamp order)
         sorted_certs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         // Apply pagination
         let start_idx = offset as usize;
         let end_idx = std::cmp::min(start_idx + limit as usize, sorted_certs.len());
         let certificates = if start_idx < sorted_certs.len() {
-            sorted_certs[start_idx..end_idx].to_vec()
+            sorted_certs[start_idx .. end_idx].to_vec()
         } else {
             vec![]
         };
@@ -225,7 +231,7 @@ impl CertificateService {
         let where_clause = if let Some(status) = status {
             let status_str = match status {
                 CertificateStatus::Active => "active",
-                CertificateStatus::Revoked => "revoked", 
+                CertificateStatus::Revoked => "revoked",
                 CertificateStatus::Expired => "expired",
             };
             format!("WHERE status = '{}'", status_str)
@@ -233,7 +239,7 @@ impl CertificateService {
             String::new()
         };
 
-        // Query all certificates 
+        // Query all certificates
         let cert_query = format!("SELECT * FROM certificates {}", where_clause);
         let all_certificates: Vec<CertificateRecord> = self
             .db
@@ -248,28 +254,28 @@ impl CertificateService {
         // Sort and paginate
         let mut sorted_certs = all_certificates;
         sorted_certs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         let start_idx = offset as usize;
         let end_idx = std::cmp::min(start_idx + limit as usize, sorted_certs.len());
         let certificates = if start_idx < sorted_certs.len() {
-            sorted_certs[start_idx..end_idx].to_vec()
+            sorted_certs[start_idx .. end_idx].to_vec()
         } else {
             vec![]
         };
 
         Ok((certificates, total_count))
     }
-    
+
     /// Mark old certificate as superseded when renewing
     pub async fn supersede_certificate(&self, cert_id: &str) -> Result<()> {
         let now = Utc::now().timestamp();
-        
+
         let query = format!(
-            "UPDATE certificates SET status = 'revoked', revoked_at = {}, revocation_reason = 'superseded' WHERE certificate_id = '{}'",
-            now,
-            cert_id
+            "UPDATE certificates SET status = 'revoked', revoked_at = {}, revocation_reason = \
+             'superseded' WHERE certificate_id = '{}'",
+            now, cert_id
         );
-        
+
         let _result: Vec<CertificateRecord> = self
             .db
             .query(query)
@@ -280,7 +286,7 @@ impl CertificateService {
 
         Ok(())
     }
-    
+
     /// Check if user already has an active certificate with the specified algorithm
     pub async fn get_active_certificate_by_user_and_algorithm(
         &self,
@@ -290,12 +296,18 @@ impl CertificateService {
         let cert: Option<CertificateRecord> = self
             .db
             .query(
-                "SELECT * FROM certificates WHERE user_id = $user_id AND key_algorithm = $algorithm AND status = 'active'"
+                "SELECT * FROM certificates WHERE user_id = $user_id AND key_algorithm = \
+                 $algorithm AND status = 'active'",
             )
             .bind(("user_id", user_id.to_string()))
             .bind(("algorithm", algorithm.to_string()))
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to query certificate by user and algorithm: {}", e)))?
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to query certificate by user and algorithm: {}",
+                    e
+                ))
+            })?
             .take(0)
             .map_err(|e| AppError::Internal(format!("Failed to parse certificate: {}", e)))?;
 

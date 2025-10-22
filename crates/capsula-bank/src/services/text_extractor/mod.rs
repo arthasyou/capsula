@@ -2,9 +2,9 @@
 //!
 //! 从各种文件格式中提取文本内容
 
+use std::{io, path::Path};
+
 use async_trait::async_trait;
-use std::path::Path;
-use std::io;
 
 pub mod simple;
 

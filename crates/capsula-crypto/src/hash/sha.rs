@@ -9,8 +9,7 @@ use sha2::{Digest, Sha256 as Sha256Hasher, Sha512 as Sha512Hasher};
 // ============================================================================
 
 /// Supported hash algorithms
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HashAlgorithm {
     /// SHA-256 (32-byte output)
     #[default]
@@ -18,7 +17,6 @@ pub enum HashAlgorithm {
     /// SHA-512 (64-byte output)
     Sha512,
 }
-
 
 // ============================================================================
 // Generic Hash Functions

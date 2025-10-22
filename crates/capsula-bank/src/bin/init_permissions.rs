@@ -46,8 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = get_db();
     db.query("REMOVE TABLE IF EXISTS capsules").await?;
     db.query("REMOVE TABLE IF EXISTS tokens").await?;
-    db.query("REMOVE TABLE IF EXISTS molecular_permissions").await?;
-    db.query("REMOVE TABLE IF EXISTS atomic_permissions").await?;
+    db.query("REMOVE TABLE IF EXISTS molecular_permissions")
+        .await?;
+    db.query("REMOVE TABLE IF EXISTS atomic_permissions")
+        .await?;
     println!("✅ 现有表已清理\n");
 
     // 创建表结构

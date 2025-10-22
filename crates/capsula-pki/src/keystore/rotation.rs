@@ -1,7 +1,8 @@
 //! 密钥轮换模块
 
-use crate::error::Result;
 use capsula_key::Key;
+
+use crate::error::Result;
 
 /// 密钥轮换器
 pub struct KeyRotation;

@@ -7,7 +7,10 @@ use toolcraft_axum_kit::middleware::cors::create_cors;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{routes::{ca::CaApi, certificate::CertificateApi}, state::AppState};
+use crate::{
+    routes::{ca::CaApi, certificate::CertificateApi},
+    state::AppState,
+};
 
 #[derive(OpenApi)]
 #[openapi(

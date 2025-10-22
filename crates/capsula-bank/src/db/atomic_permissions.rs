@@ -66,7 +66,8 @@ pub async fn get_all_atomic_permissions() -> Result<Vec<AtomicPermission>> {
 #[allow(dead_code)]
 pub async fn get_atomic_permission_by_position(position: u8) -> Result<Option<AtomicPermission>> {
     let db = get_db();
-    let permission: Option<AtomicPermission> = db.select(("atomic_permissions", position as i64)).await?;
+    let permission: Option<AtomicPermission> =
+        db.select(("atomic_permissions", position as i64)).await?;
     Ok(permission)
 }
 
@@ -75,7 +76,10 @@ pub async fn get_atomic_permission_by_position(position: u8) -> Result<Option<At
 pub async fn get_atomic_permission_by_atom_id(atom_id: &str) -> Result<Option<AtomicPermission>> {
     let db = get_db();
     let query = "SELECT * FROM atomic_permissions WHERE atom_id = $atom_id";
-    let mut response = db.query(query).bind(("atom_id", atom_id.to_string())).await?;
+    let mut response = db
+        .query(query)
+        .bind(("atom_id", atom_id.to_string()))
+        .await?;
     let permissions: Vec<AtomicPermission> = response.take(0)?;
     Ok(permissions.into_iter().next())
 }

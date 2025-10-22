@@ -79,7 +79,8 @@ pub async fn get_capsules_by_owner_and_ids(
     capsule_ids: &[String],
 ) -> Result<Vec<CapsuleRecord>> {
     let db = get_db();
-    let query = "SELECT * FROM capsules WHERE owner_id = $owner_id AND capsule_id IN $capsule_ids ORDER BY created_at DESC";
+    let query = "SELECT * FROM capsules WHERE owner_id = $owner_id AND capsule_id IN $capsule_ids \
+                 ORDER BY created_at DESC";
     let mut response = db
         .query(query)
         .bind(("owner_id", owner_id.to_string()))
@@ -111,7 +112,6 @@ pub async fn update_capsule(capsule: &CapsuleRecord) -> Result<CapsuleRecord> {
 
     updated.ok_or_else(|| crate::error::AppError::Internal("Failed to update capsule".into()))
 }
-
 
 /// 删除胶囊（物理删除，慎用）
 pub async fn delete_capsule(capsule_id: &str) -> Result<()> {

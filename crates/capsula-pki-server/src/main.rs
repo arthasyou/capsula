@@ -32,8 +32,13 @@ async fn main() {
             tracing::info!("Database initialized successfully");
         }
         Err(e) => {
-            tracing::warn!("Database initialization failed: {}. Continuing without database.", e);
-            tracing::warn!("Some certificate storage features may not work without database connection");
+            tracing::warn!(
+                "Database initialization failed: {}. Continuing without database.",
+                e
+            );
+            tracing::warn!(
+                "Some certificate storage features may not work without database connection"
+            );
         }
     }
 
@@ -43,14 +48,20 @@ async fn main() {
     match pki_manager.initialize().await {
         Ok(()) => {
             let status = pki_manager.get_ca_status();
-            tracing::info!("PKI Status: ready={}, root_ca={}, intermediate_ca={}, ca_chain={}", 
-                status.pki_ready, status.root_ca_available, 
-                status.intermediate_ca_available, status.ca_chain_available);
-            
+            tracing::info!(
+                "PKI Status: ready={}, root_ca={}, intermediate_ca={}, ca_chain={}",
+                status.pki_ready,
+                status.root_ca_available,
+                status.intermediate_ca_available,
+                status.ca_chain_available
+            );
+
             if status.pki_ready {
                 tracing::info!("PKI infrastructure ready - CA certificates loaded successfully");
             } else {
-                tracing::warn!("PKI infrastructure not fully ready - some certificates may be missing");
+                tracing::warn!(
+                    "PKI infrastructure not fully ready - some certificates may be missing"
+                );
                 tracing::warn!("Run './init_pki.sh' to initialize PKI infrastructure");
             }
         }
@@ -62,11 +73,14 @@ async fn main() {
 
     // Create shared application state
     let app_state = AppState::new(pki_manager);
-    
+
     let router = routes::create_routes().with_state(app_state);
     let http_task = http_server::start(settings.http.port, router);
 
     tracing::info!("PKI Server started on port {}", settings.http.port);
-    tracing::info!("Swagger UI available at: http://localhost:{}/swagger-ui", settings.http.port);
+    tracing::info!(
+        "Swagger UI available at: http://localhost:{}/swagger-ui",
+        settings.http.port
+    );
     let _ = tokio::join!(http_task);
 }

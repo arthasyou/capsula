@@ -1,10 +1,10 @@
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use utoipa::OpenApi;
 
-use crate::{handlers::ca::{get_ca_certificate, get_ca_status, get_root_ca, get_intermediate_ca}, state::AppState};
+use crate::{
+    handlers::ca::{get_ca_certificate, get_ca_status, get_intermediate_ca, get_root_ca},
+    state::AppState,
+};
 
 #[derive(OpenApi)]
 #[openapi(

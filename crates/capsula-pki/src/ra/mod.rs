@@ -13,32 +13,24 @@ pub mod processor;
 pub mod validation;
 
 // 重新导出主要类型和函数
+// 确认决策模块
+pub use approval::{ConfirmationPolicy, ConfirmationResult, Confirmer, Decision};
 pub use cert::{
     create_certificate, create_self_signed_certificate, export_certificate, import_certificate,
     parse_certificate, sign_certificate, verify_certificate, CertificateInfo, CertificateSubject,
     X509Certificate,
 };
 pub use csr::{build_unsigned, create_csr, CertReqInfo, Csr, CsrSubject, PublicKeyInfo};
-
 // 身份认证模块 - 使用新的类型名称
 pub use identity::{
     AuthOutcome, Context, Credential, Credentials, Evaluator, IdentityType, Policy as TrustPolicy,
     VerificationMethod,
 };
-
+// RA处理器模块
+pub use processor::{ProcessingResult, ProcessingStats, Processor};
 // 验证模块
 pub use validation::{
     ValidationIssue, ValidationOutcome, ValidationPolicy, ValidationSeverity, Validator,
-};
-
-// 确认决策模块
-pub use approval::{
-    Confirmer, ConfirmationPolicy, ConfirmationResult, Decision,
-};
-
-// RA处理器模块
-pub use processor::{
-    Processor, ProcessingResult, ProcessingStats,
 };
 
 /// RA配置

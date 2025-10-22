@@ -1,6 +1,6 @@
-use wasm_bindgen::prelude::*;
-use sha2::{Sha256, Sha512, Digest};
 use hex;
+use sha2::{Digest, Sha256, Sha512};
+use wasm_bindgen::prelude::*;
 
 /// 计算 SHA256 哈希
 #[wasm_bindgen(js_name = sha256)]
@@ -38,8 +38,12 @@ pub fn verify_hash(data: &[u8], hash: &[u8], algorithm: &str) -> Result<bool, Js
     let computed_hash = match algorithm.to_lowercase().as_str() {
         "sha256" => sha256(data),
         "sha512" => sha512(data),
-        _ => return Err(JsError::new("Unsupported algorithm. Use 'sha256' or 'sha512'")),
+        _ => {
+            return Err(JsError::new(
+                "Unsupported algorithm. Use 'sha256' or 'sha512'",
+            ))
+        }
     };
-    
+
     Ok(computed_hash == hash)
 }

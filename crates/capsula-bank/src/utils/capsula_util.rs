@@ -4,8 +4,7 @@ use capsula_key::{Key, RsaKey};
 use crate::{
     db::capsule as db_capsule,
     error::{AppError, Result},
-    models::capsule::CapsuleRecord,
-    models::recipe::Recipe,
+    models::{capsule::CapsuleRecord, recipe::Recipe},
     static_files::key,
 };
 
@@ -51,8 +50,8 @@ fn decrypt_capsule_records(
         tracing::debug!("Deserializing capsule: {}", record.capsule_id);
         tracing::debug!("capsule_data type: {:?}", record.capsule_data);
 
-        let capsule: Capsule = serde_json::from_value(record.capsule_data.clone())
-            .map_err(|e| {
+        let capsule: Capsule =
+            serde_json::from_value(record.capsule_data.clone()).map_err(|e| {
                 tracing::error!("Failed to deserialize capsule {}: {}", record.capsule_id, e);
                 tracing::error!("capsule_data: {:?}", record.capsule_data);
                 AppError::Internal(format!("Failed to deserialize capsule: {}", e))

@@ -1,12 +1,9 @@
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let package_name = env::var("CARGO_PKG_NAME").unwrap();
-    let output_dir = target_dir()
-        .join("include")
-        .join(&package_name);
+    let output_dir = target_dir().join("include").join(&package_name);
 
     std::fs::create_dir_all(&output_dir).expect("Couldn't create output directory");
 

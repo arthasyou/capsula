@@ -116,16 +116,16 @@ pub fn verify(public_key: &[u8; 32], message: &[u8], signature: &[u8; 64]) -> bo
 pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {
     // Parse Ed25519 public key from SPKI DER
     let verifying_key = public_key_from_spki_der(spki_der)?;
-    
+
     // Signature must be exactly 64 bytes for Ed25519
     if signature.len() != 64 {
         return Ok(false);
     }
-    
+
     let mut sig_array = [0u8; 64];
     sig_array.copy_from_slice(signature);
     let signature_obj = Signature::from_bytes(&sig_array);
-    
+
     Ok(verifying_key.verify(message, &signature_obj).is_ok())
 }
 

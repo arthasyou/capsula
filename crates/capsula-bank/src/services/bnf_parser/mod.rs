@@ -2,9 +2,10 @@
 //!
 //! 从文本内容中提取结构化的 BNF 语法数据
 
+use std::io;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::io;
 
 pub mod simple;
 

@@ -43,6 +43,10 @@ members = [
     "crates/capsula-bank",
 ]
 
+default-members = [
+    "crates/capsula-cli"  # 让 capsula-cli 成为默认构建对象
+]
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"

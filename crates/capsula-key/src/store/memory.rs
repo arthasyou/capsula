@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::{KeyMetadata, KeyStore, KeyHandle};
+use super::{KeyHandle, KeyMetadata, KeyStore};
 use crate::error::{Error, Result};
 
 /// Type alias for the key storage map

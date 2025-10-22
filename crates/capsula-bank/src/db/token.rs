@@ -60,11 +60,8 @@ pub async fn create_token_table() -> Result<()> {
 pub async fn create_token(token: Token) -> Result<Token> {
     let db = get_db();
     let token_id = token.token_id.clone();
-    let created: Option<Token> = db
-        .create(("tokens", token_id))
-        .content(token)
-        .await?;
-    
+    let created: Option<Token> = db.create(("tokens", token_id)).content(token).await?;
+
     created.ok_or_else(|| AppError::Internal("Failed to create token".into()))
 }
 
@@ -90,7 +87,8 @@ pub async fn get_token_by_hash(token_hash: &str) -> Result<Option<Token>> {
 /// 查询用户的所有活跃令牌
 pub async fn get_active_tokens_by_subject(subject_id: &str) -> Result<Vec<Token>> {
     let db = get_db();
-    let query = "SELECT * FROM tokens WHERE subject_id = $subject_id AND status = 'active' AND expires_at > time::unix()";
+    let query = "SELECT * FROM tokens WHERE subject_id = $subject_id AND status = 'active' AND \
+                 expires_at > time::unix()";
     let mut response = db
         .query(query)
         .bind(("subject_id", subject_id.to_string()))
@@ -124,9 +122,13 @@ pub async fn get_tokens_by_capsule(capsule_id: &str) -> Result<Vec<Token>> {
 }
 
 /// 查询用户对特定胶囊的令牌
-pub async fn get_token_for_capsule_access(subject_id: &str, capsule_id: &str) -> Result<Option<Token>> {
+pub async fn get_token_for_capsule_access(
+    subject_id: &str,
+    capsule_id: &str,
+) -> Result<Option<Token>> {
     let db = get_db();
-    let query = "SELECT * FROM tokens WHERE subject_id = $subject_id AND capsule_id = $capsule_id AND status = 'active' AND expires_at > time::unix()";
+    let query = "SELECT * FROM tokens WHERE subject_id = $subject_id AND capsule_id = $capsule_id \
+                 AND status = 'active' AND expires_at > time::unix()";
     let mut response = db
         .query(query)
         .bind(("subject_id", subject_id.to_string()))
@@ -143,7 +145,7 @@ pub async fn update_token(token: &Token) -> Result<Token> {
         .update(("tokens", token.token_id.clone()))
         .content(token.clone())
         .await?;
-    
+
     updated.ok_or_else(|| AppError::Internal("Failed to update token".into()))
 }
 
@@ -154,12 +156,12 @@ pub async fn use_token(token_id: &str) -> Result<bool> {
         Some(t) => t,
         None => return Ok(false),
     };
-    
+
     // 使用令牌
     if !token.use_token() {
         return Ok(false);
     }
-    
+
     // 更新数据库
     update_token(&token).await?;
     Ok(true)
@@ -208,9 +210,10 @@ pub async fn revoke_all_tokens_for_capsule(capsule_id: &str) -> Result<()> {
 /// 清理过期令牌
 pub async fn cleanup_expired_tokens() -> Result<u64> {
     let db = get_db();
-    let query = "DELETE tokens WHERE expires_at < time::unix() OR status IN ['expired', 'exhausted']";
+    let query =
+        "DELETE tokens WHERE expires_at < time::unix() OR status IN ['expired', 'exhausted']";
     let _response = db.query(query).await?;
-    
+
     // 返回删除的记录数
     Ok(0) // SurrealDB doesn't easily return affected rows, would need custom implementation
 }
@@ -226,12 +229,12 @@ pub async fn validate_token(
         Some(t) => t,
         None => return Ok(None),
     };
-    
+
     // 2. 检查令牌是否有效
     if !token.is_valid() {
         return Ok(None);
     }
-    
+
     // 3. 检查公钥指纹绑定
     if let Some(expected_fpr) = &token.bind_pubkey_fpr {
         if let Some(actual_fpr) = client_pubkey_fpr {
@@ -243,6 +246,6 @@ pub async fn validate_token(
             return Ok(None);
         }
     }
-    
+
     Ok(Some(token))
 }

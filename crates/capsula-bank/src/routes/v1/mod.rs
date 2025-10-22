@@ -1,11 +1,10 @@
 mod authorization;
 mod capsule;
 
-use axum::Router;
-use utoipa::OpenApi;
-
 pub use authorization::AuthorizationApi;
+use axum::Router;
 pub use capsule::CapsuleApi;
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(

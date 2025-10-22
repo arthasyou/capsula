@@ -1,6 +1,7 @@
 //! 状态缓存模块
 
 use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -74,7 +75,7 @@ impl StatusCache {
         let result = if let Some(item) = self.cache.get(key) {
             let now = OffsetDateTime::now_utc();
             let age = (now - item.cached_at).whole_seconds() as u64;
-            
+
             if age < item.ttl_seconds {
                 Some((true, item.response.clone()))
             } else {
@@ -84,18 +85,18 @@ impl StatusCache {
         } else {
             None
         };
-        
+
         match result {
             Some((true, response)) => {
                 self.stats.hit_count += 1;
                 self.update_hit_rate();
                 Some(response)
-            },
+            }
             Some((false, _)) => {
                 self.stats.miss_count += 1;
                 self.update_hit_rate();
                 None
-            },
+            }
             None => {
                 self.stats.miss_count += 1;
                 self.update_hit_rate();
@@ -117,10 +118,10 @@ impl StatusCache {
             cached_at: OffsetDateTime::now_utc(),
             ttl_seconds,
         };
-        
+
         let is_new = !self.cache.contains_key(&key);
         self.cache.insert(key, item);
-        
+
         if is_new {
             self.stats.total_items += 1;
         }
@@ -130,12 +131,12 @@ impl StatusCache {
     pub fn cleanup_expired(&mut self) {
         let now = OffsetDateTime::now_utc();
         let initial_count = self.cache.len();
-        
+
         self.cache.retain(|_, item| {
             let age = (now - item.cached_at).whole_seconds() as u64;
             age < item.ttl_seconds
         });
-        
+
         let removed_count = initial_count - self.cache.len();
         if removed_count > 0 {
             self.stats.total_items = self.cache.len();

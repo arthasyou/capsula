@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use axum::{extract::Multipart, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 
 use crate::{
@@ -36,7 +37,6 @@ pub struct UploadCapsuleResponse {
     pub message: Option<String>,
 }
 
-
 /// Upload a file and create a complete capsule (Cap0 + Cap1)
 ///
 /// This endpoint accepts a file upload and automatically:
@@ -66,7 +66,7 @@ pub async fn upload_and_create_capsule(
     let storage_url_prefix = "http://localhost:16022/files";
     let max_file_size = 100 * 1024 * 1024; // 100 MB
     let allowed_mime_types: Vec<String> = vec![]; // 空表示允许所有
-    // 解析 multipart 表单数据
+                                                  // 解析 multipart 表单数据
     let mut file_data: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
     let mut mime_type: Option<String> = None;
@@ -94,28 +94,20 @@ pub async fn upload_and_create_capsule(
                 );
             }
             "owner_id" => {
-                owner_id = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("Failed to read owner_id: {}", e)))?,
-                );
+                owner_id = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read owner_id: {}", e))
+                })?);
             }
             "content_type" => {
-                content_type = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("Failed to read content_type: {}", e)))?,
-                );
+                content_type = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read content_type: {}", e))
+                })?);
             }
             "creator" => {
-                creator = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("Failed to read creator: {}", e)))?,
-                );
+                creator =
+                    Some(field.text().await.map_err(|e| {
+                        AppError::BadRequest(format!("Failed to read creator: {}", e))
+                    })?);
             }
             _ => {
                 // 忽略未知字段
@@ -126,8 +118,7 @@ pub async fn upload_and_create_capsule(
     // 验证必需字段
     let file_data = file_data.ok_or_else(|| AppError::BadRequest("Missing file".to_string()))?;
     let filename = filename.ok_or_else(|| AppError::BadRequest("Missing filename".to_string()))?;
-    let owner_id =
-        owner_id.ok_or_else(|| AppError::BadRequest("Missing owner_id".to_string()))?;
+    let owner_id = owner_id.ok_or_else(|| AppError::BadRequest("Missing owner_id".to_string()))?;
     let content_type =
         content_type.ok_or_else(|| AppError::BadRequest("Missing content_type".to_string()))?;
 
@@ -186,7 +177,7 @@ pub async fn upload_and_create_capsule(
         owner_id: owner_id.clone(),
         content_type: content_type.clone(),
         policy_uri: "https://example.com/policy".to_string(), // TODO: 从配置或请求中获取
-        permissions: vec!["read".to_string()], // TODO: 从请求中获取
+        permissions: vec!["read".to_string()],                // TODO: 从请求中获取
         creator,
     };
 

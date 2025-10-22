@@ -1,8 +1,10 @@
 //! FFI types and enums
 
-use std::ffi::CString;
-use std::os::raw::{c_char, c_uchar, c_uint};
-use std::ptr;
+use std::{
+    ffi::CString,
+    os::raw::{c_char, c_uchar, c_uint},
+    ptr,
+};
 
 // ============================================================================
 // Types and Enums
@@ -44,7 +46,7 @@ impl CapsulaResult {
         let data_ptr = boxed_data.as_mut_ptr();
         let data_len = boxed_data.len() as c_uint;
         std::mem::forget(boxed_data); // Prevent automatic deallocation
-        
+
         Self {
             error_code: CapsulaError::Success,
             data: data_ptr,
@@ -52,12 +54,11 @@ impl CapsulaResult {
             error_message: ptr::null_mut(),
         }
     }
-    
+
     pub fn error(code: CapsulaError, message: &str) -> Self {
-        let c_message = CString::new(message).unwrap_or_else(|_| {
-            CString::new("Failed to create error message").unwrap()
-        });
-        
+        let c_message = CString::new(message)
+            .unwrap_or_else(|_| CString::new("Failed to create error message").unwrap());
+
         Self {
             error_code: code,
             data: ptr::null_mut(),
@@ -65,12 +66,12 @@ impl CapsulaResult {
             error_message: c_message.into_raw(),
         }
     }
-    
+
     /// Helper function to create a boxed success result
     pub fn success_boxed(data: Vec<u8>) -> *mut CapsulaResult {
         Box::into_raw(Box::new(Self::success(data)))
     }
-    
+
     /// Helper function to create a boxed error result  
     pub fn error_boxed(code: CapsulaError, message: &str) -> *mut CapsulaResult {
         Box::into_raw(Box::new(Self::error(code, message)))

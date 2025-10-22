@@ -2,10 +2,9 @@ mod capsule;
 mod storage;
 
 use axum::Router;
-use utoipa::OpenApi;
-
 pub use capsule::CapsuleV2Api;
 pub use storage::StorageV2Api;
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(

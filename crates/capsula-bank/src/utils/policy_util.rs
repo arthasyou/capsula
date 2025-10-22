@@ -1,3 +1,4 @@
+pub use cap1_util::Level1LlmOptions;
 use model_gateway_rs::{
     model::llm::{LlmInput, LlmOutput},
     traits::ModelClient,
@@ -6,8 +7,6 @@ use serde_json::Value;
 
 use super::{cap1_util, capsula_util::DecryptedCapsule};
 use crate::error::{AppError, Result};
-
-pub use cap1_util::Level1LlmOptions;
 
 /// 根据权限级别投影解密后的胶囊列表。
 ///

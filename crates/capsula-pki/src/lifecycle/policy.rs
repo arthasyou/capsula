@@ -81,24 +81,16 @@ pub struct RevocationPolicy {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NotificationMethod {
     /// 邮件通知
-    Email { 
+    Email {
         recipients: Vec<String>,
         template: String,
     },
     /// 系统日志
-    SystemLog {
-        level: LogLevel,
-    },
+    SystemLog { level: LogLevel },
     /// Webhook通知
-    Webhook {
-        url: String,
-        secret: Option<String>,
-    },
+    Webhook { url: String, secret: Option<String> },
     /// 文件通知
-    FileOutput {
-        path: String,
-        format: OutputFormat,
-    },
+    FileOutput { path: String, format: OutputFormat },
 }
 
 /// 日志级别
@@ -174,11 +166,9 @@ impl PolicyTemplate {
                 warning_threshold_days: 30,
                 critical_threshold_days: 7,
                 check_frequency_hours: 24,
-                notification_methods: vec![
-                    NotificationMethod::SystemLog {
-                        level: LogLevel::Info,
-                    }
-                ],
+                notification_methods: vec![NotificationMethod::SystemLog {
+                    level: LogLevel::Info,
+                }],
                 daily_summary_enabled: false,
             },
             automation_policy: AutomationPolicy {
@@ -219,7 +209,7 @@ impl PolicyTemplate {
                     },
                     NotificationMethod::SystemLog {
                         level: LogLevel::Warning,
-                    }
+                    },
                 ],
                 daily_summary_enabled: true,
             },
@@ -258,7 +248,8 @@ impl LifecyclePolicy {
                 certificate_serial: "POLICY".to_string(),
                 description: "Critical threshold should be less than warning threshold".to_string(),
                 severity: ViolationSeverity::High,
-                recommended_action: "Adjust threshold values to ensure critical < warning".to_string(),
+                recommended_action: "Adjust threshold values to ensure critical < warning"
+                    .to_string(),
             });
         }
 
@@ -288,7 +279,7 @@ mod tests {
     #[test]
     fn test_policy_validation() {
         let mut policy = PolicyTemplate::development();
-        
+
         // 测试有效策略
         assert!(policy.validate().is_ok());
 

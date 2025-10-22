@@ -22,7 +22,10 @@ impl CertificateValidator {
     }
 
     /// 验证证书状态
-    pub fn validate_certificate_status(&self, _serial_number: &str) -> Result<StatusValidationResult> {
+    pub fn validate_certificate_status(
+        &self,
+        _serial_number: &str,
+    ) -> Result<StatusValidationResult> {
         // TODO: 实现状态验证逻辑
         Ok(StatusValidationResult {
             is_valid: true,

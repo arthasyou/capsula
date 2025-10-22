@@ -1,6 +1,7 @@
 //! FFI utility functions
 
 use capsula_key::{Curve25519, P256Key, RsaKey};
+
 use crate::types::CapsulaAlgorithm;
 
 // ============================================================================

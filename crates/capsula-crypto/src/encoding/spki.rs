@@ -81,7 +81,8 @@ pub fn decrypt_dek_with_algorithm(
             let rsa_key = crate::asymmetric::rsa::Rsa::from_pkcs8_der(private_key_der)
                 .map_err(|e| Error::Other(format!("Failed to parse RSA private key: {}", e)))?;
 
-            let decrypted_dek = rsa_key.decrypt(encrypted_dek)
+            let decrypted_dek = rsa_key
+                .decrypt(encrypted_dek)
                 .map_err(|e| Error::Other(format!("RSA decryption failed: {}", e)))?;
 
             Ok(decrypted_dek)

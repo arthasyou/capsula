@@ -2,15 +2,13 @@
 //!
 //! 提供证书吊销功能，包括吊销原因管理、CRL生成和吊销状态跟踪
 
-use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 use std::collections::HashMap;
 
-use crate::{
-    error::{PkiError, Result as PkiResult},
-};
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 use super::policy::RevocationPolicy;
+use crate::error::{PkiError, Result as PkiResult};
 
 /// 吊销管理器
 pub struct RevocationManager {
@@ -140,7 +138,12 @@ impl RevocationManager {
     }
 
     /// 处理吊销请求
-    pub fn revoke_certificate(&mut self, serial_number: &str, reason: RevocationReason, revoked_by: String) -> PkiResult<()> {
+    pub fn revoke_certificate(
+        &mut self,
+        serial_number: &str,
+        reason: RevocationReason,
+        revoked_by: String,
+    ) -> PkiResult<()> {
         let request = RevocationRequest {
             certificate_serial: serial_number.to_string(),
             reason: reason.clone(),
@@ -160,9 +163,10 @@ impl RevocationManager {
 
         // 检查证书是否已被吊销
         if self.is_certificate_revoked(&request.certificate_serial) {
-            return Err(PkiError::LifecycleError(
-                format!("Certificate {} is already revoked", request.certificate_serial)
-            ));
+            return Err(PkiError::LifecycleError(format!(
+                "Certificate {} is already revoked",
+                request.certificate_serial
+            )));
         }
 
         // 计算生效时间
@@ -174,7 +178,8 @@ impl RevocationManager {
             specified_date
         } else {
             // 使用宽限期
-            request.requested_at + time::Duration::hours(self.policy.default_grace_period_hours as i64)
+            request.requested_at
+                + time::Duration::hours(self.policy.default_grace_period_hours as i64)
         };
 
         // 创建吊销条目
@@ -193,7 +198,8 @@ impl RevocationManager {
         };
 
         // 添加到吊销列表
-        self.revoked_certificates.insert(request.certificate_serial, revocation_entry);
+        self.revoked_certificates
+            .insert(request.certificate_serial, revocation_entry);
 
         // 如果需要通知相关方
         if self.policy.notify_relying_parties {
@@ -206,7 +212,10 @@ impl RevocationManager {
     /// 检查证书是否已被吊销
     pub fn is_certificate_revoked(&self, serial_number: &str) -> bool {
         if let Some(entry) = self.revoked_certificates.get(serial_number) {
-            matches!(entry.status, RevocationStatus::Active | RevocationStatus::Pending)
+            matches!(
+                entry.status,
+                RevocationStatus::Active | RevocationStatus::Pending
+            )
         } else {
             false
         }
@@ -221,9 +230,11 @@ impl RevocationManager {
     pub fn hold_certificate(&mut self, serial_number: &str, holder: String) -> PkiResult<()> {
         if let Some(entry) = self.revoked_certificates.get_mut(serial_number) {
             if entry.reason == RevocationReason::CertificateHold {
-                return Err(PkiError::LifecycleError("Certificate is already on hold".to_string()));
+                return Err(PkiError::LifecycleError(
+                    "Certificate is already on hold".to_string(),
+                ));
             }
-            
+
             entry.reason = RevocationReason::CertificateHold;
             entry.status = RevocationStatus::OnHold;
             entry.revoked_by = holder;
@@ -240,8 +251,9 @@ impl RevocationManager {
                 status: RevocationStatus::OnHold,
                 notification_sent: false,
             };
-            
-            self.revoked_certificates.insert(serial_number.to_string(), hold_entry);
+
+            self.revoked_certificates
+                .insert(serial_number.to_string(), hold_entry);
         }
 
         Ok(())
@@ -251,14 +263,18 @@ impl RevocationManager {
     pub fn unhold_certificate(&mut self, serial_number: &str) -> PkiResult<()> {
         if let Some(entry) = self.revoked_certificates.get_mut(serial_number) {
             if entry.reason != RevocationReason::CertificateHold {
-                return Err(PkiError::LifecycleError("Certificate is not on hold".to_string()));
+                return Err(PkiError::LifecycleError(
+                    "Certificate is not on hold".to_string(),
+                ));
             }
-            
+
             // 从CRL中移除（设置为移除状态）
             entry.reason = RevocationReason::RemoveFromCRL;
             entry.status = RevocationStatus::Removed;
         } else {
-            return Err(PkiError::LifecycleError("Certificate not found in revocation list".to_string()));
+            return Err(PkiError::LifecycleError(
+                "Certificate not found in revocation list".to_string(),
+            ));
         }
 
         Ok(())
@@ -270,10 +286,12 @@ impl RevocationManager {
         self.update_pending_revocations();
 
         let now = OffsetDateTime::now_utc();
-        let next_update = now + time::Duration::hours(self.policy.crl_update_frequency_hours as i64);
+        let next_update =
+            now + time::Duration::hours(self.policy.crl_update_frequency_hours as i64);
 
         // 统计活跃的吊销条目
-        let active_revocations: Vec<&RevocationEntry> = self.revoked_certificates
+        let active_revocations: Vec<&RevocationEntry> = self
+            .revoked_certificates
             .values()
             .filter(|entry| entry.status == RevocationStatus::Active)
             .collect();
@@ -326,7 +344,10 @@ impl RevocationManager {
     }
 
     /// 根据状态筛选吊销条目
-    pub fn list_revoked_certificates_by_status(&self, status: RevocationStatus) -> Vec<&RevocationEntry> {
+    pub fn list_revoked_certificates_by_status(
+        &self,
+        status: RevocationStatus,
+    ) -> Vec<&RevocationEntry> {
         self.revoked_certificates
             .values()
             .filter(|entry| entry.status == status)
@@ -343,16 +364,22 @@ impl RevocationManager {
     /// 验证吊销请求
     fn validate_revocation_request(&self, request: &RevocationRequest) -> PkiResult<()> {
         if request.certificate_serial.is_empty() {
-            return Err(PkiError::LifecycleError("Certificate serial number is required".to_string()));
+            return Err(PkiError::LifecycleError(
+                "Certificate serial number is required".to_string(),
+            ));
         }
 
         if request.revoked_by.is_empty() {
-            return Err(PkiError::LifecycleError("Revoker information is required".to_string()));
+            return Err(PkiError::LifecycleError(
+                "Revoker information is required".to_string(),
+            ));
         }
 
         // 验证吊销原因
         if matches!(request.reason, RevocationReason::RemoveFromCRL) {
-            return Err(PkiError::LifecycleError("RemoveFromCRL is not a valid revocation reason for new revocations".to_string()));
+            return Err(PkiError::LifecycleError(
+                "RemoveFromCRL is not a valid revocation reason for new revocations".to_string(),
+            ));
         }
 
         Ok(())
@@ -361,7 +388,7 @@ impl RevocationManager {
     /// 更新待处理的吊销状态
     fn update_pending_revocations(&mut self) {
         let now = OffsetDateTime::now_utc();
-        
+
         for entry in self.revoked_certificates.values_mut() {
             if entry.status == RevocationStatus::Pending && entry.effective_date <= now {
                 entry.status = RevocationStatus::Active;
@@ -428,14 +455,18 @@ mod tests {
     fn test_certificate_revocation() {
         let mut manager = RevocationManager::new();
         let serial = "CERT-12345";
-        
+
         // 吊销证书
-        let result = manager.revoke_certificate(serial, RevocationReason::KeyCompromise, "admin@example.com".to_string());
+        let result = manager.revoke_certificate(
+            serial,
+            RevocationReason::KeyCompromise,
+            "admin@example.com".to_string(),
+        );
         assert!(result.is_ok());
-        
+
         // 检查证书是否已被吊销
         assert!(manager.is_certificate_revoked(serial));
-        
+
         // 获取吊销信息
         let info = manager.get_revocation_info(serial);
         assert!(info.is_some());
@@ -446,12 +477,22 @@ mod tests {
     fn test_duplicate_revocation() {
         let mut manager = RevocationManager::new();
         let serial = "CERT-12345";
-        
+
         // 第一次吊销
-        manager.revoke_certificate(serial, RevocationReason::KeyCompromise, "admin@example.com".to_string()).unwrap();
-        
+        manager
+            .revoke_certificate(
+                serial,
+                RevocationReason::KeyCompromise,
+                "admin@example.com".to_string(),
+            )
+            .unwrap();
+
         // 第二次吊销应该失败
-        let result = manager.revoke_certificate(serial, RevocationReason::Superseded, "admin@example.com".to_string());
+        let result = manager.revoke_certificate(
+            serial,
+            RevocationReason::Superseded,
+            "admin@example.com".to_string(),
+        );
         assert!(result.is_err());
     }
 
@@ -459,21 +500,21 @@ mod tests {
     fn test_certificate_hold() {
         let mut manager = RevocationManager::new();
         let serial = "CERT-12345";
-        
+
         // 暂停证书
         let result = manager.hold_certificate(serial, "admin@example.com".to_string());
         assert!(result.is_ok());
-        
+
         // 检查是否处于暂停状态
         let info = manager.get_revocation_info(serial);
         assert!(info.is_some());
         assert_eq!(info.unwrap().reason, RevocationReason::CertificateHold);
         assert_eq!(info.unwrap().status, RevocationStatus::OnHold);
-        
+
         // 解除暂停
         let result = manager.unhold_certificate(serial);
         assert!(result.is_ok());
-        
+
         // 检查状态是否更新
         let info = manager.get_revocation_info(serial);
         assert_eq!(info.unwrap().status, RevocationStatus::Removed);
@@ -482,7 +523,7 @@ mod tests {
     #[test]
     fn test_crl_generation() {
         let mut manager = RevocationManager::new();
-        
+
         // 使用紧急吊销来立即生效
         let emergency_request1 = RevocationRequest {
             certificate_serial: "CERT-001".to_string(),
@@ -492,7 +533,7 @@ mod tests {
             emergency_revocation: true,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
+
         let emergency_request2 = RevocationRequest {
             certificate_serial: "CERT-002".to_string(),
             reason: RevocationReason::Superseded,
@@ -501,10 +542,14 @@ mod tests {
             emergency_revocation: true,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
-        manager.process_revocation_request(emergency_request1).unwrap();
-        manager.process_revocation_request(emergency_request2).unwrap();
-        
+
+        manager
+            .process_revocation_request(emergency_request1)
+            .unwrap();
+        manager
+            .process_revocation_request(emergency_request2)
+            .unwrap();
+
         // 生成CRL
         let crl_result = manager.generate_crl().unwrap();
         assert_eq!(crl_result.revoked_count, 2);
@@ -514,7 +559,7 @@ mod tests {
     #[test]
     fn test_revocation_statistics() {
         let mut manager = RevocationManager::new();
-        
+
         // 使用紧急吊销来立即生效
         let emergency_request1 = RevocationRequest {
             certificate_serial: "CERT-001".to_string(),
@@ -524,7 +569,7 @@ mod tests {
             emergency_revocation: true,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
+
         let emergency_request2 = RevocationRequest {
             certificate_serial: "CERT-002".to_string(),
             reason: RevocationReason::Superseded,
@@ -533,11 +578,17 @@ mod tests {
             emergency_revocation: true,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
-        manager.process_revocation_request(emergency_request1).unwrap();
-        manager.process_revocation_request(emergency_request2).unwrap();
-        manager.hold_certificate("CERT-003", "admin@example.com".to_string()).unwrap();
-        
+
+        manager
+            .process_revocation_request(emergency_request1)
+            .unwrap();
+        manager
+            .process_revocation_request(emergency_request2)
+            .unwrap();
+        manager
+            .hold_certificate("CERT-003", "admin@example.com".to_string())
+            .unwrap();
+
         let stats = manager.get_revocation_statistics();
         assert_eq!(stats.total_revocations, 3);
         assert_eq!(stats.active_revocations, 2);
@@ -548,13 +599,16 @@ mod tests {
     fn test_revocation_reason_display() {
         assert_eq!(RevocationReason::KeyCompromise.to_string(), "keyCompromise");
         assert_eq!(RevocationReason::CACompromise.to_string(), "cACompromise");
-        assert_eq!(RevocationReason::CertificateHold.to_string(), "certificateHold");
+        assert_eq!(
+            RevocationReason::CertificateHold.to_string(),
+            "certificateHold"
+        );
     }
 
     #[test]
     fn test_list_revoked_certificates() {
         let mut manager = RevocationManager::new();
-        
+
         // 使用紧急吊销来立即生效
         let emergency_request = RevocationRequest {
             certificate_serial: "CERT-001".to_string(),
@@ -564,18 +618,22 @@ mod tests {
             emergency_revocation: true,
             requested_at: OffsetDateTime::now_utc(),
         };
-        
-        manager.process_revocation_request(emergency_request).unwrap();
-        manager.hold_certificate("CERT-002", "admin@example.com".to_string()).unwrap();
-        
+
+        manager
+            .process_revocation_request(emergency_request)
+            .unwrap();
+        manager
+            .hold_certificate("CERT-002", "admin@example.com".to_string())
+            .unwrap();
+
         // 列出所有吊销证书
         let all_revoked = manager.list_revoked_certificates();
         assert_eq!(all_revoked.len(), 2);
-        
+
         // 按状态筛选
         let on_hold = manager.list_revoked_certificates_by_status(RevocationStatus::OnHold);
         assert_eq!(on_hold.len(), 1);
-        
+
         let active = manager.list_revoked_certificates_by_status(RevocationStatus::Active);
         assert_eq!(active.len(), 1);
     }

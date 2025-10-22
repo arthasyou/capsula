@@ -1,7 +1,8 @@
 //! 密钥托管与导出模块
 
-use crate::error::Result;
 use capsula_key::Key;
+
+use crate::error::Result;
 
 /// 密钥托管器
 pub struct KeyEscrow;

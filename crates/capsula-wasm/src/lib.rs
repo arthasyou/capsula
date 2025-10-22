@@ -1,12 +1,11 @@
-mod key;
 mod hash;
+mod key;
 mod signature;
 mod utils;
 
-pub use key::*;
 pub use hash::*;
+pub use key::*;
 pub use signature::*;
-
 use wasm_bindgen::prelude::*;
 
 /// 初始化 panic hook，用于更好的错误信息

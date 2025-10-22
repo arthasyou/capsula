@@ -12,8 +12,11 @@ pub mod types;
 // pub use api::{create_medical_capsule, decrypt_medical_capsule_rsa, CapsulaApi};
 // pub use decapsulator::{CapsuleDecryptor, DecapsulationResult, VerificationInfo};
 // pub use encapsulator::CapsulaBuilder;
-pub use capsule::{Cap0, Cap0ExternalSeal, Cap1, Cap1Summary, ZkpProof, Cap2, RefEntry, RefMetadata, Capsule, CapsuleHeader, CapsulePayload, CapsuleContent, PolicyControl, CapsuleIntegrity};
+pub use aad::{AadBinder, AadBinding, AadContext, AadValidationResult, AadValidator};
+pub use capsule::{
+    Cap0, Cap0ExternalSeal, Cap1, Cap1Summary, Cap2, Capsule, CapsuleContent, CapsuleHeader,
+    CapsuleIntegrity, CapsulePayload, PolicyControl, RefEntry, RefMetadata, ZkpProof,
+};
 pub use error::{CoreError, Result};
 pub use keyring::{KeyWrap, Keyring};
-pub use aad::{AadBinding, AadBinder, AadValidator, AadValidationResult, AadContext};
 pub use types::*;

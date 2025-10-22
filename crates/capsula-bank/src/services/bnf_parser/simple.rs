@@ -2,9 +2,11 @@
 //!
 //! 支持基本的 BNF 语法解析
 
-use super::{BnfData, BnfParser, BnfRule};
-use async_trait::async_trait;
 use std::io;
+
+use async_trait::async_trait;
+
+use super::{BnfData, BnfParser, BnfRule};
 
 /// 简单 BNF 解析器
 ///
@@ -68,7 +70,7 @@ impl SimpleBnfParser {
 
         // 提取规则名（去除尖括号）
         let name = if name.starts_with('<') && name.ends_with('>') {
-            &name[1..name.len() - 1]
+            &name[1 .. name.len() - 1]
         } else {
             name
         };
@@ -95,13 +97,16 @@ impl SimpleBnfParser {
         let mut metadata = std::collections::HashMap::new();
 
         // 统计规则数量
-        let rule_count = text.lines().filter(|line| {
-            let line = line.trim();
-            !line.is_empty() &&
-            !line.starts_with("//") &&
-            !line.starts_with("#") &&
-            (line.contains("::=") || line.contains("="))
-        }).count();
+        let rule_count = text
+            .lines()
+            .filter(|line| {
+                let line = line.trim();
+                !line.is_empty()
+                    && !line.starts_with("//")
+                    && !line.starts_with("#")
+                    && (line.contains("::=") || line.contains("="))
+            })
+            .count();
 
         metadata.insert("rule_count".to_string(), rule_count.to_string());
         metadata.insert("line_count".to_string(), text.lines().count().to_string());
@@ -228,10 +233,7 @@ mod tests {
         let parser = SimpleBnfParser::new();
         let result = parser.parse(input).await.unwrap();
 
-        assert_eq!(
-            result.metadata.get("rule_count").unwrap(),
-            "3"
-        );
+        assert_eq!(result.metadata.get("rule_count").unwrap(), "3");
     }
 
     #[tokio::test]

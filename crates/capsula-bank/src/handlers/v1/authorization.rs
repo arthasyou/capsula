@@ -323,7 +323,8 @@ pub async fn list_permissions(
             db_token::get_active_tokens_by_subject(&grantee).await?
         } else {
             // Get all tokens for this subject (not just active)
-            // Note: token.rs doesn't have this function, so we use get_active_tokens_by_subject for now
+            // Note: token.rs doesn't have this function, so we use get_active_tokens_by_subject for
+            // now
             db_token::get_active_tokens_by_subject(&grantee).await?
         }
     } else {

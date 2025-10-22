@@ -28,7 +28,9 @@ pub async fn get_ca_status(State(app_state): State<AppState>) -> Result<Json<CaS
         if let Some(root_cert) = pki_manager.get_root_ca_cert() {
             Some(CaInfo {
                 ca_certificate_pem: root_cert.clone(),
-                subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+                subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, \
+                          ST=California, C=US"
+                    .to_string(),
                 serial_number: "1".to_string(),
                 not_before: chrono::Utc::now() - chrono::Duration::days(1),
                 not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
@@ -46,8 +48,8 @@ pub async fn get_ca_status(State(app_state): State<AppState>) -> Result<Json<CaS
     let status = CaStatus {
         initialized: pki_status.pki_ready,
         ca_info,
-        certificates_issued: 0, // TODO: Get from database
-        active_certificates: 0, // TODO: Get from database
+        certificates_issued: 0,  // TODO: Get from database
+        active_certificates: 0,  // TODO: Get from database
         revoked_certificates: 0, // TODO: Get from database
     };
 
@@ -65,15 +67,19 @@ pub async fn get_ca_status(State(app_state): State<AppState>) -> Result<Json<CaS
     ),
     tag = "CA"
 )]
-pub async fn get_ca_certificate(State(app_state): State<AppState>) -> Result<Json<CaInfo>, AppError> {
+pub async fn get_ca_certificate(
+    State(app_state): State<AppState>,
+) -> Result<Json<CaInfo>, AppError> {
     tracing::info!("Getting CA certificate");
 
     let pki_manager = app_state.pki_manager.read().await;
-    
+
     if let Some(root_cert) = pki_manager.get_root_ca_cert() {
         let ca_info = CaInfo {
             ca_certificate_pem: root_cert.clone(),
-            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, \
+                      ST=California, C=US"
+                .to_string(),
             serial_number: "1".to_string(),
             not_before: chrono::Utc::now() - chrono::Duration::days(1),
             not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
@@ -81,10 +87,12 @@ pub async fn get_ca_certificate(State(app_state): State<AppState>) -> Result<Jso
             key_size: Some(2048),
             created_at: chrono::Utc::now() - chrono::Duration::days(1),
         };
-        
+
         Ok(Json(ca_info))
     } else {
-        Err(AppError::NotFound("CA not initialized or certificate not found".to_string()))
+        Err(AppError::NotFound(
+            "CA not initialized or certificate not found".to_string(),
+        ))
     }
 }
 
@@ -103,11 +111,13 @@ pub async fn get_root_ca(State(app_state): State<AppState>) -> Result<Json<CaInf
     tracing::info!("Getting Root CA certificate");
 
     let pki_manager = app_state.pki_manager.read().await;
-    
+
     if let Some(root_cert) = pki_manager.get_root_ca_cert() {
         let ca_info = CaInfo {
             ca_certificate_pem: root_cert.clone(),
-            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, ST=California, C=US".to_string(),
+            subject: "CN=Capsula Root CA, O=Capsula PKI, OU=Root CA, L=San Francisco, \
+                      ST=California, C=US"
+                .to_string(),
             serial_number: "1".to_string(),
             not_before: chrono::Utc::now() - chrono::Duration::days(1),
             not_after: chrono::Utc::now() + chrono::Duration::days(7300), // 20 years
@@ -115,10 +125,12 @@ pub async fn get_root_ca(State(app_state): State<AppState>) -> Result<Json<CaInf
             key_size: Some(2048),
             created_at: chrono::Utc::now() - chrono::Duration::days(1),
         };
-        
+
         Ok(Json(ca_info))
     } else {
-        Err(AppError::NotFound("Root CA not found or PKI not initialized".to_string()))
+        Err(AppError::NotFound(
+            "Root CA not found or PKI not initialized".to_string(),
+        ))
     }
 }
 
@@ -133,15 +145,19 @@ pub async fn get_root_ca(State(app_state): State<AppState>) -> Result<Json<CaInf
     ),
     tag = "CA"
 )]
-pub async fn get_intermediate_ca(State(app_state): State<AppState>) -> Result<Json<CaInfo>, AppError> {
+pub async fn get_intermediate_ca(
+    State(app_state): State<AppState>,
+) -> Result<Json<CaInfo>, AppError> {
     tracing::info!("Getting Intermediate CA certificate");
 
     let pki_manager = app_state.pki_manager.read().await;
-    
+
     if let Some(intermediate_cert) = pki_manager.get_intermediate_ca_cert() {
         let ca_info = CaInfo {
             ca_certificate_pem: intermediate_cert.clone(),
-            subject: "CN=Capsula Intermediate CA, O=Capsula PKI, OU=Intermediate CA, L=San Francisco, ST=California, C=US".to_string(),
+            subject: "CN=Capsula Intermediate CA, O=Capsula PKI, OU=Intermediate CA, L=San \
+                      Francisco, ST=California, C=US"
+                .to_string(),
             serial_number: "2".to_string(),
             not_before: chrono::Utc::now() - chrono::Duration::days(1),
             not_after: chrono::Utc::now() + chrono::Duration::days(3650), // 10 years
@@ -149,10 +165,11 @@ pub async fn get_intermediate_ca(State(app_state): State<AppState>) -> Result<Js
             key_size: Some(2048),
             created_at: chrono::Utc::now() - chrono::Duration::days(1),
         };
-        
+
         Ok(Json(ca_info))
     } else {
-        Err(AppError::NotFound("Intermediate CA not found or PKI not initialized".to_string()))
+        Err(AppError::NotFound(
+            "Intermediate CA not found or PKI not initialized".to_string(),
+        ))
     }
 }
-

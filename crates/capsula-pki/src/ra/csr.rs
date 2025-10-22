@@ -444,7 +444,7 @@ impl Csr {
     /// Get public key info for validation
     pub fn get_public_key_info(&self) -> Result<PublicKeyInfo> {
         let spki = &self.inner.info.public_key;
-        
+
         // 解析算法标识符
         let algorithm = match spki.algorithm.oid {
             const_oid::db::rfc8410::ID_ED_25519 => "Ed25519".to_string(),
@@ -462,9 +462,9 @@ impl Csr {
             // RSA 公钥的 DER 编码大小大致可以估算密钥长度
             // 这是一个粗略估算，实际密钥长度需要解析 ASN.1 结构
             match public_key_data.len() {
-                200..=299 => Some(2048), // 2048位 RSA 公钥大约 270 字节
-                300..=399 => Some(3072), // 3072位 RSA 公钥大约 390 字节  
-                400..=600 => Some(4096), // 4096位 RSA 公钥大约 550 字节
+                200 ..= 299 => Some(2048), // 2048位 RSA 公钥大约 270 字节
+                300 ..= 399 => Some(3072), // 3072位 RSA 公钥大约 390 字节
+                400 ..= 600 => Some(4096), // 4096位 RSA 公钥大约 550 字节
                 _ => None,
             }
         } else {

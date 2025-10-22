@@ -6,25 +6,26 @@
 //! - 密钥恢复/轮换
 //! - 存储后端管理
 
-pub mod storage;
+pub mod escrow;
 pub mod generator;
 pub mod hsm;
-pub mod escrow;
+pub mod pki_adapter;
 pub mod recovery;
 pub mod rotation;
-pub mod pki_adapter;
+pub mod storage;
 
 // 重新导出存储相关类型
-pub use storage::{CertificateStore, FileSystemBackend, StorageBackend};
+use std::collections::HashMap;
+
+use capsula_key::Key;
 // 重新导出PKI adapter类型
 pub use pki_adapter::{
-    PKIKeyStore, PKIKeyMetadata, PolicyConstraints, CertificateType, 
-    ExtendedKeyUsage, CertificateTemplate, PKIKeyStoreStatistics
+    CertificateTemplate, CertificateType, ExtendedKeyUsage, PKIKeyMetadata, PKIKeyStore,
+    PKIKeyStoreStatistics, PolicyConstraints,
 };
+pub use storage::{CertificateStore, FileSystemBackend, StorageBackend};
 
 use crate::error::Result;
-use capsula_key::Key;
-use std::collections::HashMap;
 
 /// 密钥类型
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -129,7 +130,7 @@ impl KeystoreManager {
     pub fn generate_key(&mut self, config: KeyGenerationConfig) -> Result<(String, Box<dyn Key>)> {
         // TODO: 简化的密钥生成实现
         let key_id = format!("key-{}", time::OffsetDateTime::now_utc().unix_timestamp());
-        
+
         // 简化的密钥生成，忽略HSM
         let key = self.generate_software_key(&config)?;
 
@@ -171,7 +172,8 @@ impl KeystoreManager {
     //     let mut hasher = Sha256::new();
     //     hasher.update(time::OffsetDateTime::now_utc().to_string());
     //     let mut buf = [0u8; 16];
-    //     getrandom::getrandom(&mut buf[..]).map_err(|e| crate::error::PkiError::KeyError(format!("Random generation failed: {}", e)))?;
+    //     getrandom::getrandom(&mut buf[..]).map_err(|e|
+    // crate::error::PkiError::KeyError(format!("Random generation failed: {}", e)))?;
     //     hasher.update(&buf);
     //     let hash = hasher.finalize();
     //     Ok(format!("key-{}", hex::encode(&hash[..8])))
@@ -182,7 +184,7 @@ impl KeystoreManager {
         match config.key_type {
             KeyType::Ed25519 => Ok(Box::new(capsula_key::Curve25519::generate()?)),
             KeyType::ECDSA(_) => Ok(Box::new(capsula_key::P256Key::generate()?)), // 使用P256实现
-            KeyType::RSA(_) => Ok(Box::new(capsula_key::RsaKey::generate_2048()?)), // 使用RSA 2048实现
+            KeyType::RSA(_) => Ok(Box::new(capsula_key::RsaKey::generate_2048()?)), /* 使用RSA 2048实现 */
         }
     }
 

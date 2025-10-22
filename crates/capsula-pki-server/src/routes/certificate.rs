@@ -4,9 +4,13 @@ use axum::{
 };
 use utoipa::OpenApi;
 
-use crate::{handlers::certificate::{
-    create_certificate, get_certificate, list_certificates, renew_certificate, revoke_certificate, get_user_certificates,
-}, state::AppState};
+use crate::{
+    handlers::certificate::{
+        create_certificate, get_certificate, get_user_certificates, list_certificates,
+        renew_certificate, revoke_certificate,
+    },
+    state::AppState,
+};
 
 #[derive(OpenApi)]
 #[openapi(
