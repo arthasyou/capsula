@@ -4,9 +4,7 @@ use capsula_bank::utils::{
 };
 use capsula_core::CapsuleContent;
 use model_gateway_rs::{
-    clients::llm::LlmClient,
-    error::Result as GatewayResult,
-    sdk::openai::OpenAiSdk,
+    clients::llm::LlmClient, error::Result as GatewayResult, sdk::openai::OpenAiSdk,
 };
 use serde_json::json;
 
@@ -15,10 +13,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let capsules = sample_cap1_capsules();
 
     println!("=== Level 0 (Raw Capsules) ===");
-    println!("{}", serde_json::to_string_pretty(&project_cap1_level0(&capsules))?);
+    // println!("{}", serde_json::to_string_pretty(&project_cap1_level0(&capsules))?);
     println!();
 
     let llm_client = create_ollama_client()?;
+
     let level1_view = summarize_cap1_level1_with_llm(
         &capsules,
         &llm_client,
@@ -149,7 +148,7 @@ fn sample_cap1_capsules() -> Vec<DecryptedCapsule> {
 
 fn create_ollama_client() -> GatewayResult<LlmClient<OpenAiSdk>> {
     const BASE_URL: &str = "http://localhost:11434/v1";
-    const MODEL_NAME: &str = "gpt-oss:20b";
+    const MODEL_NAME: &str = "gpt-oss:latest";
     const API_KEY: &str = "";
 
     let sdk = OpenAiSdk::new(API_KEY, BASE_URL, MODEL_NAME)?;
@@ -197,7 +196,7 @@ fn build_capsule(
             .map(|dt| dt.timestamp())
             .unwrap_or_default(),
         content: CapsuleContent::Cap1Content {
-            cap0_id: format!("cid:cap0-source-{}", &capsule_id[4..]),
+            cap0_id: format!("cid:cap0-source-{}", &capsule_id[4 ..]),
             meta_data: serde_json::to_vec(&meta).unwrap(),
             bnf_extract_data: serde_json::to_vec(&bnf).unwrap(),
         },

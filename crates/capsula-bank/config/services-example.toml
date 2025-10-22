@@ -17,3 +17,15 @@ username = "root"
 password = "root"
 namespace = "dev"
 database = "dev"
+
+[key]
+private_key_path = "keys/private_key.pem"
+
+[storage]
+root_dir = "storage"
+url_prefix = "http://localhost:16022/files/"
+
+[upload]
+temp_dir = "storage/temp"
+max_file_size = 10485760          # 10 MB
+allowed_file_types = ["image/png", "image/jpeg", "application/pdf"]
