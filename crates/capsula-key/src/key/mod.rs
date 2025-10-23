@@ -59,7 +59,45 @@ pub trait Key: Send + Sync {
 
     /// 获取Any trait object引用，用于安全的向下转换
     fn as_any(&self) -> &dyn std::any::Any;
+
+    /// 获取签名用途公钥（SPKI DER）
+    fn signing_spki_der_opt(&self) -> Option<Vec<u8>> {
+        self.public_keys()
+            .signing_key()
+            .map(|entry| entry.spki_der.clone())
+    }
+
+    /// 获取签名用途公钥的原始字节（如 Ed25519 的 32 字节公钥）
+    fn signing_raw_public_key_opt(&self) -> Option<Vec<u8>> {
+        self.public_keys()
+            .signing_key()
+            .and_then(|entry| entry.raw_public_key.clone())
+    }
 }
+
+/// 公钥导出能力（便捷获取特定用途的公钥）
+pub trait KeyPublicExport: Key {
+    /// 导出签名用途公钥的 SPKI DER 编码
+    fn signing_spki_der(&self) -> Result<Vec<u8>> {
+        self.signing_spki_der_opt().ok_or_else(|| {
+            Error::KeyError("Signing public key not available".to_string())
+        })
+    }
+
+    /// 导出签名用途公钥的 SPKI PEM 编码
+    fn signing_spki_pem(&self) -> Result<String> {
+        let der = self.signing_spki_der()?;
+        let pem = pem::Pem::new("PUBLIC KEY", der);
+        Ok(pem::encode_config(&pem, pem::EncodeConfig::default()))
+    }
+
+    /// 获取签名用途公钥的原始字节（如果存在）
+    fn signing_raw_public_key(&self) -> Option<Vec<u8>> {
+        self.signing_raw_public_key_opt()
+    }
+}
+
+impl<T: ?Sized + Key> KeyPublicExport for T {}
 
 // ============================================================================
 // Capability Traits: Optional Implementations

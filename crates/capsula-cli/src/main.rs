@@ -122,7 +122,9 @@ fn main() -> CliResult<()> {
         Commands::Info { key } => {
             commands::info::handle(key)?;
         }
-        Commands::Verify { file, signature } => todo!(),
+        Commands::Verify { file, signature } => {
+            commands::verify::handle(file, signature)?;
+        }
         Commands::Hash { file, algorithm } => todo!(),
     }
 

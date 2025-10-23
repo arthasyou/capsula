@@ -134,11 +134,8 @@ impl KeySign for RsaKey {
     }
 
     fn signature_algorithm_id(&self) -> AlgorithmIdentifierOwned {
-        // RSA with SHA-512 signature algorithm OID
-        AlgorithmIdentifierOwned {
-            oid: const_oid::db::rfc5912::SHA_512_WITH_RSA_ENCRYPTION,
-            parameters: None,
-        }
+        capsula_crypto::Rsa::default_pss_algorithm_id()
+            .expect("RSA PSS algorithm identifier generation failed")
     }
 }
 

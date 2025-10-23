@@ -2,7 +2,8 @@ use std::{fs, path::Path};
 
 use capsula_crypto::hash::sha512;
 use capsula_key::{
-    load_signing_key_from_pkcs8_pem, DigitalSignature, ExtendedSignatureInfo, LocationInfo,
+    load_signing_key_from_pkcs8_pem, DigitalSignature, ExtendedSignatureInfo, KeyPublicExport,
+    LocationInfo,
 };
 use colored::Colorize;
 
@@ -81,14 +82,13 @@ pub fn handle(
     let signature_bytes = signing_key.sign(&sign_data)?;
 
     // 选择公钥数据（优先使用原始公钥，否则使用 SPKI DER）
-    let public_keys = signing_key.public_keys();
-    let signing_public = public_keys
-        .signing_key()
-        .ok_or_else(|| CliError::Other("未找到可用的签名公钥".to_string()))?;
-    let public_key_bytes = signing_public
-        .raw_public_key
-        .clone()
-        .unwrap_or_else(|| signing_public.spki_der.clone());
+    let public_key_bytes = if let Some(raw) = signing_key.signing_raw_public_key() {
+        raw
+    } else {
+        signing_key
+            .signing_spki_der()
+            .map_err(|e| CliError::Other(format!("未找到可用的签名公钥: {}", e)))?
+    };
 
     // 创建数字签名
     let signature = DigitalSignature {
