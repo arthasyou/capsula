@@ -14,10 +14,12 @@ use crate::error::{Error, Result};
 pub mod curve25519;
 pub mod p256;
 pub mod rsa;
+pub mod util;
 
 pub use curve25519::Curve25519;
 pub use p256::P256Key;
 pub use rsa::RsaKey;
+pub use util::{load_signing_key_from_pkcs8_der, load_signing_key_from_pkcs8_pem};
 
 /// Core trait for cryptographic keys
 ///

@@ -1,8 +1,10 @@
 use std::{fs, path::Path};
 
-use capsula_key::{DigitalSignature, LocationInfo};
+use capsula_key::{
+    load_signing_key_from_pkcs8_pem, DigitalSignature, ExtendedSignatureInfo, LocationInfo,
+    SigningKey,
+};
 use colored::Colorize;
-use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use sha2::{Digest, Sha256};
 
 use crate::error::{CliError, CliResult};
@@ -25,10 +27,9 @@ pub fn handle(
     let data = fs::read(&file)?;
     println!("  文件大小: {} 字节", data.len());
 
-    // 读取私钥
+    // 读取并解析私钥（目前使用 Curve25519 / Ed25519 组合）
     let private_key_pem = fs::read_to_string(&key)?;
-    let signing_key = SigningKey::from_pkcs8_pem(&private_key_pem)
-        .map_err(|e| CliError::Other(format!("Failed to import private key: {}", e)))?;
+    let signing_key: Box<dyn SigningKey> = load_signing_key_from_pkcs8_pem(&private_key_pem)?;
     println!("  使用私钥: {}", key);
 
     // 构建位置信息
@@ -59,7 +60,6 @@ pub fn handle(
     let data_hash = hasher.finalize().to_vec();
 
     // 创建扩展签名信息
-    use capsula_key::ExtendedSignatureInfo;
     let extended_info = ExtendedSignatureInfo {
         data_hash: data_hash.clone(),
         timestamp: std::time::SystemTime::now()
@@ -80,9 +80,18 @@ pub fn handle(
     sign_data.extend_from_slice(&data_hash);
     sign_data.extend_from_slice(&extended_info_bytes);
 
-    // 签名
-    let signature_bytes = signing_key.sign(&sign_data).to_bytes().to_vec();
-    let public_key_bytes = signing_key.verifying_key().to_bytes().to_vec();
+    // 使用 capsula-key 的签名能力
+    let signature_bytes = signing_key.sign(&sign_data)?;
+
+    // 选择公钥数据（优先使用原始公钥，否则使用 SPKI DER）
+    let public_keys = signing_key.public_keys();
+    let signing_public = public_keys
+        .signing_key()
+        .ok_or_else(|| CliError::Other("未找到可用的签名公钥".to_string()))?;
+    let public_key_bytes = signing_public
+        .raw_public_key
+        .clone()
+        .unwrap_or_else(|| signing_public.spki_der.clone());
 
     // 创建数字签名
     let signature = DigitalSignature {
@@ -101,6 +110,8 @@ pub fn handle(
     println!("{} 签名已保存到: {}", "✓".green(), output_file);
     println!();
     println!("{}", "签名信息:".cyan());
+    println!("  算法: {}", signing_key.algorithm().name());
+    println!("  密钥ID: {}", signing_key.key_id_hex());
     println!("  时间戳: {}", signature.timestamp_readable());
     println!(
         "  数据哈希: {}",
