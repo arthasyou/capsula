@@ -1,10 +1,19 @@
 use base64::{engine::general_purpose, Engine as _};
-use pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding};
-use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use pkcs8::{
+    spki::AlgorithmIdentifierOwned, DecodePrivateKey, DecodePublicKey, EncodePrivateKey,
+    EncodePublicKey, LineEnding,
+};
+use rsa::{
+    pss::{self, BlindedSigningKey, Signature as PssSignature, VerifyingKey},
+    sha2::Sha512,
+    signature::{RandomizedSigner, SignatureEncoding, Verifier},
+    traits::PublicKeyParts,
+    RsaPrivateKey, RsaPublicKey,
+};
 
 use crate::{
     error::{Error, Result},
-    hash::{sha256, sha512, Sha512},
+    hash::sha256,
 };
 
 pub struct Rsa {
@@ -114,19 +123,12 @@ impl Rsa {
         self.inner.size() * 8
     }
 
-    /// Sign data using PKCS#1 v1.5 with SHA-512
+    /// Sign data using RSASSA-PSS with SHA-512
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>> {
         let mut rng = rand::thread_rng();
-        let digest = sha512(message);
-        let signature = self
-            .inner
-            .sign_with_rng(
-                &mut rng,
-                rsa::Pkcs1v15Sign::new::<Sha512>(),
-                &digest,
-            )
-            .map_err(|e| Error::Other(format!("RSA signing failed: {}", e)))?;
-        Ok(signature)
+        let signing_key = BlindedSigningKey::<Sha512>::new(self.inner.clone());
+        let signature = signing_key.sign_with_rng(&mut rng, message);
+        Ok(signature.to_vec())
     }
 
     /// Encrypt data using own public key with PKCS#1 v1.5 padding
@@ -150,6 +152,16 @@ impl Rsa {
         let spki = self.to_spki_der()?;
         Ok(sha256(&spki))
     }
+
+    /// Default RSASSA-PSS algorithm identifier (SHA-512)
+    pub fn default_pss_algorithm_id() -> Result<AlgorithmIdentifierOwned> {
+        pss::get_default_pss_signature_algo_id::<Sha512>().map_err(|e| {
+            Error::Other(format!(
+                "Failed to encode RSA-PSS algorithm identifier: {}",
+                e
+            ))
+        })
+    }
 }
 
 /// Verify RSA signature with standard SPKI DER interface
@@ -157,11 +169,12 @@ pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -
     // Parse RSA public key from SPKI DER
     let public_key = public_key_from_spki_der(spki_der)?;
 
-    // Verify using PKCS#1 v1.5 with SHA-512
-    let digest = sha512(message);
-    Ok(public_key
-        .verify(rsa::Pkcs1v15Sign::new::<Sha512>(), &digest, signature)
-        .is_ok())
+    // Verify using RSASSA-PSS with SHA-512
+    let verifying_key = VerifyingKey::<Sha512>::new(public_key);
+    let signature = PssSignature::try_from(signature)
+        .map_err(|e| Error::Other(format!("Invalid RSA PSS signature: {}", e)))?;
+
+    Ok(verifying_key.verify(message, &signature).is_ok())
 }
 
 /// Import public key from SPKI DER format
