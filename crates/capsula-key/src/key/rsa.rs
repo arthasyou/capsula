@@ -134,9 +134,9 @@ impl KeySign for RsaKey {
     }
 
     fn signature_algorithm_id(&self) -> AlgorithmIdentifierOwned {
-        // RSA with SHA-256 signature algorithm OID
+        // RSA with SHA-512 signature algorithm OID
         AlgorithmIdentifierOwned {
-            oid: const_oid::db::rfc5912::SHA_256_WITH_RSA_ENCRYPTION,
+            oid: const_oid::db::rfc5912::SHA_512_WITH_RSA_ENCRYPTION,
             parameters: None,
         }
     }

@@ -1,9 +1,11 @@
 use base64::{engine::general_purpose, Engine as _};
 use pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding};
 use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
-use sha2::{Digest, Sha256};
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    hash::{sha256, sha512, Sha512},
+};
 
 pub struct Rsa {
     pub inner: RsaPrivateKey,
@@ -85,7 +87,7 @@ impl Rsa {
         let public_key = self.inner.to_public_key();
         // compute SPKI fingerprint as kid
         let spki = self.to_spki_der()?;
-        let fp: [u8; 32] = Sha256::digest(&spki).into();
+        let fp = sha256(&spki);
         let kid = general_purpose::URL_SAFE_NO_PAD.encode(fp);
 
         let n = general_purpose::URL_SAFE_NO_PAD.encode(public_key.n().to_bytes_be());
@@ -112,13 +114,17 @@ impl Rsa {
         self.inner.size() * 8
     }
 
-    /// Sign data using PKCS#1 v1.5 with SHA-256
+    /// Sign data using PKCS#1 v1.5 with SHA-512
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>> {
         let mut rng = rand::thread_rng();
-        let hashed = Sha256::digest(message);
+        let digest = sha512(message);
         let signature = self
             .inner
-            .sign_with_rng(&mut rng, rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed)
+            .sign_with_rng(
+                &mut rng,
+                rsa::Pkcs1v15Sign::new::<Sha512>(),
+                &digest,
+            )
             .map_err(|e| Error::Other(format!("RSA signing failed: {}", e)))?;
         Ok(signature)
     }
@@ -142,7 +148,7 @@ impl Rsa {
     /// Generate SPKI SHA-256 fingerprint
     pub fn spki_sha256_fingerprint(&self) -> Result<[u8; 32]> {
         let spki = self.to_spki_der()?;
-        Ok(Sha256::digest(&spki).into())
+        Ok(sha256(&spki))
     }
 }
 
@@ -151,10 +157,10 @@ pub fn verify_with_spki_der(spki_der: &[u8], message: &[u8], signature: &[u8]) -
     // Parse RSA public key from SPKI DER
     let public_key = public_key_from_spki_der(spki_der)?;
 
-    // Verify using PKCS#1 v1.5 with SHA-256
-    let hashed = Sha256::digest(message);
+    // Verify using PKCS#1 v1.5 with SHA-512
+    let digest = sha512(message);
     Ok(public_key
-        .verify(rsa::Pkcs1v15Sign::new::<Sha256>(), &hashed, signature)
+        .verify(rsa::Pkcs1v15Sign::new::<Sha512>(), &digest, signature)
         .is_ok())
 }
 

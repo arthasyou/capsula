@@ -1,11 +1,10 @@
 use std::{fs, path::Path};
 
+use capsula_crypto::hash::sha512;
 use capsula_key::{
     load_signing_key_from_pkcs8_pem, DigitalSignature, ExtendedSignatureInfo, LocationInfo,
-    SigningKey,
 };
 use colored::Colorize;
-use sha2::{Digest, Sha256};
 
 use crate::error::{CliError, CliResult};
 
@@ -29,7 +28,7 @@ pub fn handle(
 
     // 读取并解析私钥（目前使用 Curve25519 / Ed25519 组合）
     let private_key_pem = fs::read_to_string(&key)?;
-    let signing_key: Box<dyn SigningKey> = load_signing_key_from_pkcs8_pem(&private_key_pem)?;
+    let signing_key = load_signing_key_from_pkcs8_pem(&private_key_pem)?;
     println!("  使用私钥: {}", key);
 
     // 构建位置信息
@@ -54,10 +53,8 @@ pub fn handle(
     // 签名数据
     println!("{}", "执行签名...".cyan());
 
-    // 计算数据哈希
-    let mut hasher = Sha256::new();
-    hasher.update(&data);
-    let data_hash = hasher.finalize().to_vec();
+    // 计算数据哈希（SHA-512）
+    let data_hash = sha512(&data).to_vec();
 
     // 创建扩展签名信息
     let extended_info = ExtendedSignatureInfo {
