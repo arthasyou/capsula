@@ -138,7 +138,7 @@ impl CertificateRevocationList {
         let signature = DigitalSignature {
             signature: vec![0u8; 64], // 临时签名
             alg: Algorithm::Ed25519,
-            public_key: vec![0u8; 32], // 临时公钥
+            spki_der: vec![0u8; 32], // 临时公钥
         };
 
         self.signature = Some(signature);

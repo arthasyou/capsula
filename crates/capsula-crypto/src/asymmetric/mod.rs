@@ -46,3 +46,8 @@ pub fn pem_to_der(pem: &str) -> Result<Vec<u8>> {
     let parsed = pem::parse(pem).map_err(|e| Error::Other(format!("Failed to parse PEM: {e}")))?;
     Ok(parsed.contents().to_vec())
 }
+
+pub fn der_to_pem(label: &str, der: &[u8]) -> String {
+    let pem = pem::Pem::new(label, der.to_vec());
+    pem::encode_config(&pem, pem::EncodeConfig::default())
+}

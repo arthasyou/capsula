@@ -285,8 +285,9 @@ impl KeyFileIO for Curve25519 {
         fs::create_dir_all(base_dir).map_err(Error::from)?;
 
         // Export private key
+        let private_pem = self.to_pkcs8_pem()?;
         let private_key_path = base_dir.join(format!("{}_private.pem", name_prefix));
-        self.save_pkcs8_pem_file(&private_key_path)?;
+        std::fs::write(&private_key_path, private_pem).map_err(Error::IoError)?;
 
         // Export public keys
         let public_key_exports = self.export_public_keys_pem(base_dir, name_prefix)?;

@@ -29,16 +29,7 @@ pub fn handle(file: String, key: String, output: Option<String>) -> CliResult<()
     let signature_bytes = signing_key.sign(&data)?;
 
     // 选择公钥数据（优先使用原始公钥，否则使用 SPKI DER）
-    let public_key_bytes = signing_key
-        .public_keys()
-        .signing_key()
-        .ok_or_else(|| CliError::Other("未找到可用的签名公钥".to_string()))
-        .map(|entry| {
-            entry
-                .raw_public_key
-                .clone()
-                .unwrap_or_else(|| entry.spki_der.clone())
-        })?;
+    let spki_der = signing_key.to_spki_der()?;
 
     // 将算法使用可序列化的名称形式（string）传递，以避免不同 crate 中同名 enum 的类型冲突
     let alg = signing_key.algorithm();
@@ -47,7 +38,7 @@ pub fn handle(file: String, key: String, output: Option<String>) -> CliResult<()
     let signature = DigitalSignature {
         signature: signature_bytes,
         alg,
-        public_key: public_key_bytes,
+        spki_der,
     };
 
     // 确定输出文件名

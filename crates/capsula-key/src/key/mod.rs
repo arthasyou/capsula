@@ -131,28 +131,6 @@ pub trait KeyExport {
     fn to_spki_der(&self) -> Result<Vec<u8>>;
 
     fn to_spki_pem(&self) -> Result<String>;
-
-    /// 保存私钥到PEM文件
-    fn save_pkcs8_pem_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
-        let pem = self.to_pkcs8_pem()?;
-        std::fs::write(path, pem).map_err(Error::from)
-    }
-
-    /// 保存私钥到DER文件
-    fn save_pkcs8_der_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
-        let der = self.to_pkcs8_der()?;
-        std::fs::write(path, der).map_err(Error::from)
-    }
-
-    fn save_spki_der_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
-        let der = self.to_spki_der()?;
-        std::fs::write(path, der).map_err(Error::from)
-    }
-
-    fn save_spki_pem_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
-        let pem = self.to_spki_pem()?;
-        std::fs::write(path, pem).map_err(Error::from)
-    }
 }
 
 /// 密钥文件I/O能力（导出所有密钥到文件）
@@ -481,8 +459,8 @@ impl KeyExportInfo {
 
 // ============================================================================
 
-pub trait SigningKey: Key + KeySign + Send + Sync {}
-impl<T: Key + KeySign + Send + Sync> SigningKey for T {}
+pub trait SigningKey: Key + KeySign + KeyExport + Send + Sync {}
+impl<T: Key + KeySign + KeyExport + Send + Sync> SigningKey for T {}
 
-pub trait SigningAndKeyAgreementKey: Key + KeySign + KeyAgree + Send + Sync {}
-impl<T: Key + KeySign + KeyAgree + Send + Sync> SigningAndKeyAgreementKey for T {}
+pub trait SigningAndKeyAgreementKey: Key + KeySign + KeyAgree + KeyExport + Send + Sync {}
+impl<T: Key + KeySign + KeyAgree + KeyExport + Send + Sync> SigningAndKeyAgreementKey for T {}

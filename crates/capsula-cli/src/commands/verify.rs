@@ -18,7 +18,7 @@ pub fn handle(file: String, signature_path: String) -> CliResult<()> {
     let signature_content = fs::read_to_string(&signature_path)?;
     let digital_signature = DigitalSignature::from_json(&signature_content)?;
 
-    let algorithm_label = if digital_signature.public_key.len() == 32 {
+    let algorithm_label = if digital_signature.spki_der.len() == 32 {
         "Ed25519"
     } else {
         "RSA"
