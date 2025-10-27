@@ -34,13 +34,14 @@ members = [
     "crates/capsula-crypto",
     "crates/capsula-pki",
     "crates/capsula-pki-server",
-    # "crates/capsula-api",
+    "crates/capsula-api",
     "crates/capsula-cli",
     "crates/capsula-key",
     "crates/capsula-wasm",
     "crates/capsula-ffi",
     "crates/capsula-core",
     "crates/capsula-bank",
+    "crates/capsula-android",
 ]
 
 default-members = [
@@ -61,6 +62,7 @@ capsula-pki = { path = "crates/capsula-pki" }
 capsula-core = { path = "crates/capsula-core" }
 capsula-key = { path = "crates/capsula-key" }
 capsula-ffi = { path = "crates/capsula-ffi" }
+capsula-api = { path = "crates/capsula-api" }
 
 
 # 外部依赖

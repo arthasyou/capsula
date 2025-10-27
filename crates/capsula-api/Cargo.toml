@@ -1,43 +1,32 @@
 [package]
 name = "capsula-api"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Data Capsule REST API server with encapsulation and decapsulation endpoints"
+description = "Capsula 统一 API 层 - 高级功能函数库，为所有绑定层提供便捷接口"
+
+[lib]
+# 纯 Rust 库，不是 cdylib 或 bin
 
 [dependencies]
-# Capsula crates
-capsula-core = { path = "../capsula-core" }
-capsula-key = { path = "../capsula-key" }
-capsula-crypto = { path = "../capsula-crypto" }
+# 内部依赖
+capsula-core = { workspace = true }
+capsula-key = { workspace = true }
+capsula-crypto = { workspace = true }
 
-# Web framework
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = [
-    "env-filter",
-    "fmt",
-    "time",
-] }
-tracing-appender = "0.2"
-tokio = { version = "1", features = ["full"] }
-axum = { version = "0.8", features = ["macros"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-validator = { version = "0.20", features = ["derive"] }
-thiserror = "2"
+# 序列化
+serde = { workspace = true }
+serde_json = { workspace = true }
 
-# API documentation
-utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
-utoipa-axum = { version = "0.2" }
+# 错误处理
+thiserror = { workspace = true }
 
-# Utilities
-toolcraft-axum-kit = { version = "0.2.3" }
-toolcraft-config = { version = "0.2.0" }
-toolcraft-utils = { version = "0.2.0" }
-chrono = { version = "0.4", features = ["serde"] }
-base64 = "0.22"
-uuid = { version = "1.0", features = ["v4", "serde"] }
-time = { version = "0.3", features = ["serde"] }
+# 编码
+base64 = { workspace = true }
+
+# 工具
+hex = { workspace = true }
+
+[dev-dependencies]
