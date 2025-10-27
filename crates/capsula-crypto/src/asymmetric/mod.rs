@@ -8,12 +8,10 @@ pub mod p256;
 pub mod rsa;
 pub mod x25519;
 
-pub use ed25519::Ed25519;
-pub use p256::P256;
-pub use rsa::Rsa;
-pub use x25519::X25519;
+use der::Decode;
+use pkcs8::spki::SubjectPublicKeyInfoOwned;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// Verify signature using standard SPKI DER format (algorithm auto-detection)
 ///
@@ -22,8 +20,6 @@ use crate::error::Result;
 /// verification method.
 pub fn verify_signature(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {
     // Parse the SPKI to get the algorithm OID
-    use der::Decode;
-    use pkcs8::spki::SubjectPublicKeyInfoOwned;
 
     let spki = SubjectPublicKeyInfoOwned::from_der(spki_der)?;
     let algorithm_oid = spki.algorithm.oid;
@@ -44,4 +40,9 @@ pub fn verify_signature(spki_der: &[u8], message: &[u8], signature: &[u8]) -> Re
             algorithm_oid
         ))),
     }
+}
+
+pub fn pem_to_der(pem: &str) -> Result<Vec<u8>> {
+    let parsed = pem::parse(pem).map_err(|e| Error::Other(format!("Failed to parse PEM: {e}")))?;
+    Ok(parsed.contents().to_vec())
 }

@@ -3,13 +3,14 @@ mod file;
 mod hsm;
 mod memory;
 
+use capsula_crypto::Algorithm;
 pub use enhanced::{BackupStatus, EnhancedKeyMetadata, EnhancedKeyStore, KeyUsage, KeyValidity};
 pub use file::FileKeyStore;
 pub use hsm::HsmKeyStore;
 pub use memory::MemoryKeyStore;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Result, key::Algorithm};
+use crate::error::Result;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct KeyHandle(pub u64);

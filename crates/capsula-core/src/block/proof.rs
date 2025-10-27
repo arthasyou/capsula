@@ -1,4 +1,4 @@
-use capsula_crypto::base64;
+use capsula_crypto::{base64, Algorithm};
 use capsula_key::key::{Key, KeySign};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as Sha2Digest, Sha256};
@@ -151,10 +151,10 @@ impl AuthorProof {
     /// Get signature algorithm name from signing key
     fn get_signature_algorithm_name<K: Key>(signing_key: &K) -> String {
         match signing_key.algorithm() {
-            capsula_key::key::Algorithm::Ed25519 => "Ed25519".to_string(),
-            capsula_key::key::Algorithm::P256 => "ES256".to_string(),
-            capsula_key::key::Algorithm::Rsa => "RS256".to_string(),
-            capsula_key::key::Algorithm::X25519 => {
+            Algorithm::Ed25519 => "Ed25519".to_string(),
+            Algorithm::P256 => "ES256".to_string(),
+            Algorithm::Rsa => "RS256".to_string(),
+            Algorithm::X25519 => {
                 // X25519 is for key agreement, not signing
                 "UNKNOWN".to_string()
             }

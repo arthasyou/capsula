@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use capsula_crypto::Algorithm;
 use capsula_key::{Curve25519, DigitalSignature};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -136,13 +137,7 @@ impl CertificateRevocationList {
         // let location_info = LocationInfo::default();
         let signature = DigitalSignature {
             signature: vec![0u8; 64], // 临时签名
-            extended_info: capsula_key::ExtendedSignatureInfo {
-                data_hash: vec![0u8; 32],
-                timestamp: 0,
-                location: capsula_key::LocationInfo::default(),
-                signer_info: None,
-                signature_type: Some("digital".to_string()),
-            },
+            alg: Algorithm::Ed25519,
             public_key: vec![0u8; 32], // 临时公钥
         };
 

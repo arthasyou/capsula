@@ -5,8 +5,8 @@ use pkcs8::spki::AlgorithmIdentifierOwned;
 use sha2::{Digest, Sha256};
 
 use super::{
-    Algorithm, ExportablePrivateKey, Key, KeyAgree, KeyCapabilities, KeyExportInfo, KeyFileIO,
-    KeySign, KeyUsage, PublicKeyExportInfo, PublicKeySet,
+    Algorithm, Key, KeyAgree, KeyCapabilities, KeyExport, KeyExportInfo, KeyFileIO, KeySign,
+    KeyUsage, PublicKeyExportInfo, PublicKeySet,
 };
 use crate::error::{Error, Result};
 
@@ -245,7 +245,7 @@ impl KeyAgree for Curve25519 {
     }
 }
 
-impl ExportablePrivateKey for Curve25519 {
+impl KeyExport for Curve25519 {
     fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
         self.ed25519
             .to_pkcs8_der()
@@ -255,6 +255,18 @@ impl ExportablePrivateKey for Curve25519 {
     fn to_pkcs8_pem(&self) -> Result<String> {
         self.ed25519
             .to_pkcs8_pem()
+            .map_err(|e| Error::EncodingError(e.to_string()))
+    }
+
+    fn to_spki_der(&self) -> Result<Vec<u8>> {
+        self.ed25519
+            .to_spki_der()
+            .map_err(|e| Error::EncodingError(e.to_string()))
+    }
+
+    fn to_spki_pem(&self) -> Result<String> {
+        self.ed25519
+            .to_spki_pem()
             .map_err(|e| Error::EncodingError(e.to_string()))
     }
 }
@@ -413,7 +425,7 @@ mod tests {
     #[test]
     fn test_pem_export_import() {
         let key = Curve25519::generate().unwrap();
-        let pem = <Curve25519 as ExportablePrivateKey>::to_pkcs8_pem(&key).unwrap();
+        let pem = <Curve25519 as KeyExport>::to_pkcs8_pem(&key).unwrap();
         let imported = Curve25519::from_pkcs8_pem(&pem).unwrap();
 
         // Keys should match
@@ -428,7 +440,7 @@ mod tests {
     #[test]
     fn test_der_export_import() {
         let key = Curve25519::generate().unwrap();
-        let der = <Curve25519 as ExportablePrivateKey>::to_pkcs8_der(&key).unwrap();
+        let der = <Curve25519 as KeyExport>::to_pkcs8_der(&key).unwrap();
         let imported = Curve25519::from_pkcs8_der(&der).unwrap();
 
         // Keys should match
@@ -482,13 +494,13 @@ mod tests {
         let key = Curve25519::generate().unwrap();
 
         // Test PEM file operations using trait methods
-        let pem_data = <Curve25519 as ExportablePrivateKey>::to_pkcs8_pem(&key).unwrap();
+        let pem_data = <Curve25519 as KeyExport>::to_pkcs8_pem(&key).unwrap();
         fs::write(&key_path, &pem_data).unwrap();
         let loaded = Curve25519::from_pkcs8_pem(&pem_data).unwrap();
         assert_eq!(key.key_id(), loaded.key_id());
 
         // Test DER file operations using trait methods
-        let der_data = <Curve25519 as ExportablePrivateKey>::to_pkcs8_der(&key).unwrap();
+        let der_data = <Curve25519 as KeyExport>::to_pkcs8_der(&key).unwrap();
         fs::write(&der_path, &der_data).unwrap();
         let loaded = Curve25519::from_pkcs8_der(&der_data).unwrap();
         assert_eq!(key.key_id(), loaded.key_id());

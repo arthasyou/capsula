@@ -45,14 +45,6 @@ enum Commands {
         /// 签名输出文件
         #[arg(short, long)]
         output: Option<String>,
-
-        /// 签名者信息
-        #[arg(long)]
-        signer: Option<String>,
-
-        /// 签名位置
-        #[arg(long)]
-        location: Option<String>,
     },
 
     /// 验证签名
@@ -107,14 +99,8 @@ fn main() -> CliResult<()> {
         } => {
             commands::generate::handle(name, algorithm, output)?;
         }
-        Commands::Sign {
-            file,
-            key,
-            output,
-            signer,
-            location,
-        } => {
-            commands::sign::handle(file, key, output, signer, location)?;
+        Commands::Sign { file, key, output } => {
+            commands::sign::handle(file, key, output)?;
         }
         Commands::Export { key, output } => {
             commands::export::handle(key, output)?;

@@ -46,13 +46,13 @@ impl Ed25519 {
         self.inner.to_bytes()
     }
 
-    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
-        let der = self.inner.to_pkcs8_der()?;
-        Ok(der.as_bytes().to_vec())
+    /// Get the public key for this keypair
+    pub fn public_key(&self) -> VerifyingKey {
+        self.inner.verifying_key()
     }
 
-    pub fn to_spki_der(&self) -> Result<Vec<u8>> {
-        let der = self.inner.verifying_key().to_public_key_der()?;
+    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>> {
+        let der = self.inner.to_pkcs8_der()?;
         Ok(der.as_bytes().to_vec())
     }
 
@@ -61,11 +61,13 @@ impl Ed25519 {
         Ok(pem.to_string())
     }
 
+    pub fn to_spki_der(&self) -> Result<Vec<u8>> {
+        let der = self.public_key().to_public_key_der()?;
+        Ok(der.as_bytes().to_vec())
+    }
+
     pub fn to_spki_pem(&self) -> Result<String> {
-        let pem = self
-            .inner
-            .verifying_key()
-            .to_public_key_pem(LineEnding::LF)?;
+        let pem = self.public_key().to_public_key_pem(LineEnding::LF)?;
         Ok(pem)
     }
 
@@ -86,11 +88,6 @@ impl Ed25519 {
 }
 
 impl Ed25519 {
-    /// Get the public key for this keypair
-    pub fn public_key(&self) -> VerifyingKey {
-        self.inner.verifying_key()
-    }
-
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
         let signature = self.inner.sign(message);
         signature.to_bytes()

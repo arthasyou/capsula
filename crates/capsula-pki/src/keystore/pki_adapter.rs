@@ -5,9 +5,10 @@
 
 use std::collections::HashMap;
 
+use capsula_crypto::Algorithm;
 use capsula_key::{
     store::{EnhancedKeyMetadata, EnhancedKeyStore, KeyUsage as StoreKeyUsage, KeyValidity},
-    Algorithm as KeyAlgorithm, Key,
+    Key,
 };
 use serde::{Deserialize, Serialize};
 
@@ -276,7 +277,7 @@ impl PKIKeyStore {
     ) -> Result<
         Vec<(
             capsula_key::store::KeyHandle,
-            KeyAlgorithm,
+            Algorithm,
             String,
             Vec<String>,
         )>,
@@ -471,7 +472,7 @@ mod tests {
 
         // Retrieve key
         let retrieved_key = pki_store.get_pki_key(handle).unwrap();
-        assert_eq!(retrieved_key.algorithm(), KeyAlgorithm::Ed25519);
+        assert_eq!(retrieved_key.algorithm(), Algorithm::Ed25519);
 
         // Check PKI metadata
         let pki_metadata = pki_store.get_pki_metadata(handle).unwrap();

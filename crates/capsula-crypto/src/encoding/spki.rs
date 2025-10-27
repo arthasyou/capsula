@@ -4,12 +4,13 @@
 //! including algorithm identification and public key extraction.
 
 use pkcs8::spki::AlgorithmIdentifierRef;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
 /// 支持的算法类型枚举
 /// Note: This is separate from capsula_key::key::Algorithm to avoid circular dependencies
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Algorithm {
     Ed25519,
     X25519,

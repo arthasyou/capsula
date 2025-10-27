@@ -1,21 +1,11 @@
 use std::{fs, path::Path};
 
-use capsula_crypto::hash::sha512;
-use capsula_key::{
-    load_signing_key_from_pkcs8_pem, DigitalSignature, ExtendedSignatureInfo, KeyPublicExport,
-    LocationInfo,
-};
+use capsula_key::{load_signing_key_from_pkcs8_pem, DigitalSignature};
 use colored::Colorize;
 
 use crate::error::{CliError, CliResult};
 
-pub fn handle(
-    file: String,
-    key: String,
-    output: Option<String>,
-    signer: Option<String>,
-    location: Option<String>,
-) -> CliResult<()> {
+pub fn handle(file: String, key: String, output: Option<String>) -> CliResult<()> {
     println!("{}", format!("签名文件: {}", file).cyan());
 
     // 检查文件是否存在
@@ -32,68 +22,31 @@ pub fn handle(
     let signing_key = load_signing_key_from_pkcs8_pem(&private_key_pem)?;
     println!("  使用私钥: {}", key);
 
-    // 构建位置信息
-    let location_info = if let Some(loc) = location {
-        LocationInfo {
-            latitude: None,
-            longitude: None,
-            address: Some(loc),
-            institution_id: None,
-            department: None,
-        }
-    } else {
-        LocationInfo {
-            latitude: None,
-            longitude: None,
-            address: None,
-            institution_id: None,
-            department: None,
-        }
-    };
-
     // 签名数据
     println!("{}", "执行签名...".cyan());
 
-    // 计算数据哈希（SHA-512）
-    let data_hash = sha512(&data).to_vec();
-
-    // 创建扩展签名信息
-    let extended_info = ExtendedSignatureInfo {
-        data_hash: data_hash.clone(),
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        location: location_info,
-        signer_info: signer,
-        signature_type: Some("文件签名".to_string()),
-    };
-
-    // 序列化扩展信息
-    let extended_info_bytes =
-        serde_json::to_vec(&extended_info).map_err(|e| CliError::Serialization(e))?;
-
-    // 构建待签名数据
-    let mut sign_data = Vec::new();
-    sign_data.extend_from_slice(&data_hash);
-    sign_data.extend_from_slice(&extended_info_bytes);
-
     // 使用 capsula-key 的签名能力
-    let signature_bytes = signing_key.sign(&sign_data)?;
+    let signature_bytes = signing_key.sign(&data)?;
 
     // 选择公钥数据（优先使用原始公钥，否则使用 SPKI DER）
-    let public_key_bytes = if let Some(raw) = signing_key.signing_raw_public_key() {
-        raw
-    } else {
-        signing_key
-            .signing_spki_der()
-            .map_err(|e| CliError::Other(format!("未找到可用的签名公钥: {}", e)))?
-    };
+    let public_key_bytes = signing_key
+        .public_keys()
+        .signing_key()
+        .ok_or_else(|| CliError::Other("未找到可用的签名公钥".to_string()))
+        .map(|entry| {
+            entry
+                .raw_public_key
+                .clone()
+                .unwrap_or_else(|| entry.spki_der.clone())
+        })?;
+
+    // 将算法使用可序列化的名称形式（string）传递，以避免不同 crate 中同名 enum 的类型冲突
+    let alg = signing_key.algorithm();
 
     // 创建数字签名
     let signature = DigitalSignature {
         signature: signature_bytes,
-        extended_info,
+        alg,
         public_key: public_key_bytes,
     };
 
@@ -109,17 +62,6 @@ pub fn handle(
     println!("{}", "签名信息:".cyan());
     println!("  算法: {}", signing_key.algorithm().name());
     println!("  密钥ID: {}", signing_key.key_id_hex());
-    println!("  时间戳: {}", signature.timestamp_readable());
-    println!(
-        "  数据哈希: {}",
-        hex::encode(&signature.extended_info.data_hash[.. 16])
-    );
-    if let Some(ref s) = signature.extended_info.signer_info {
-        println!("  签名者: {}", s);
-    }
-    if let Some(ref addr) = signature.extended_info.location.address {
-        println!("  位置: {}", addr);
-    }
 
     Ok(())
 }

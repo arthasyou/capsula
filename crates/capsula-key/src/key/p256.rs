@@ -3,8 +3,8 @@ use capsula_crypto::P256;
 use pkcs8::spki::AlgorithmIdentifierOwned;
 
 use super::{
-    Algorithm, ExportablePrivateKey, Key, KeyAgree, KeyCapabilities, KeyExportInfo, KeyFileIO,
-    KeySign, KeyUsage, PublicKeyExportInfo, PublicKeySet,
+    Algorithm, Key, KeyAgree, KeyCapabilities, KeyExport, KeyExportInfo, KeyFileIO, KeySign,
+    KeyUsage, PublicKeyExportInfo, PublicKeySet,
 };
 use crate::error::{Error, Result};
 
@@ -176,10 +176,10 @@ impl KeyAgree for P256Key {
 }
 
 // ============================================================================
-// ExportablePrivateKey Trait Implementation
+// KeyExport Trait Implementation
 // ============================================================================
 
-impl ExportablePrivateKey for P256Key {
+impl KeyExport for P256Key {
     fn to_pkcs8_pem(&self) -> Result<String> {
         self.inner
             .to_pkcs8_pem()
@@ -190,6 +190,16 @@ impl ExportablePrivateKey for P256Key {
         self.inner
             .to_pkcs8_der()
             .map_err(|e| Error::ExportError(format!("P-256 PKCS8 DER export failed: {}", e)))
+    }
+
+    fn to_spki_der(&self) -> Result<Vec<u8>> {
+        let der = self.inner.to_spki_der()?;
+        Ok(der)
+    }
+
+    fn to_spki_pem(&self) -> Result<String> {
+        let pem = self.inner.to_spki_pem()?;
+        Ok(pem)
     }
 }
 

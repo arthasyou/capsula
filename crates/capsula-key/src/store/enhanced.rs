@@ -5,12 +5,13 @@
 
 use std::collections::HashMap;
 
+use capsula_crypto::Algorithm;
 use serde::{Deserialize, Serialize};
 
 use super::{KeyHandle, KeyMetadata, KeyStore};
 use crate::{
     error::{Error, Result},
-    key::{Algorithm, Curve25519, ExportablePrivateKey, Key, P256Key, RsaKey},
+    key::{Curve25519, Key, KeyExport, P256Key, RsaKey},
 };
 
 /// Enhanced key metadata with more PKI-specific information

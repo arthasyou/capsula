@@ -101,8 +101,9 @@ impl KeyStore for MemoryKeyStore {
 mod tests {
     use std::collections::HashMap;
 
+    use capsula_crypto::Algorithm;
+
     use super::*;
-    use crate::store::Algorithm;
 
     #[test]
     fn test_memory_store_basic_operations() {

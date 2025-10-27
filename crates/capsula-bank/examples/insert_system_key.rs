@@ -7,7 +7,7 @@ use capsula_bank::{
     models::private_key::PrivateKey,
     settings::Settings,
 };
-use capsula_key::{ExportablePrivateKey, RsaKey};
+use capsula_key::{KeyExport, RsaKey};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

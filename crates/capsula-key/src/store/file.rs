@@ -216,10 +216,10 @@ impl KeyStore for FileKeyStore {
 mod tests {
     use std::collections::HashMap;
 
+    use capsula_crypto::Algorithm;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::store::Algorithm;
 
     #[test]
     fn test_file_store() {

@@ -5,7 +5,7 @@ use std::{
     os::raw::{c_char, c_uchar, c_uint},
 };
 
-use capsula_key::{Curve25519, ExportablePrivateKey, P256Key, RsaKey};
+use capsula_key::{Curve25519, KeyExport, P256Key, RsaKey};
 
 use crate::types::{CapsulaAlgorithm, CapsulaError, CapsulaResult};
 
